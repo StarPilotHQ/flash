@@ -1,0 +1,19 @@
+{
+  "name": "starpilot-flash",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run scripts/build.js",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@commaai/qdl": "github:commaai/qdl.js#21d7be79fa5178f253d32a0879bd8bdd4fa37e30",
+    "@noble/hashes": "1.8.0",
+    "@yume-chan/adb": "2.6.4",
+    "@yume-chan/adb-credential-web": "2.1.0",
+    "@yume-chan/adb-daemon-webusb": "2.3.2",
+    "crc-32": "1.2.2",
+    "xz-decompress": "0.2.3"
+  },
+  "trustedDependencies": ["@commaai/qdl"]
+}

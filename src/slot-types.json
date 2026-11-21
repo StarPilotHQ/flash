@@ -1,0 +1,93 @@
+{
+  "sbl1": [
+    "dea0ba2c-cbdd-4805-b4f9-f428251c3e98",
+    "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"
+  ],
+  "rpm": [
+    "098df793-d712-413d-9d4e-89d711772228",
+    "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"
+  ],
+  "tz": [
+    "a053aa7f-40b8-4b1c-ba08-2f68ac71a4f4",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "aboot": [
+    "400ffdcd-22e0-47e7-9a23-f16ed9382388",
+    "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"
+  ],
+  "boot": [
+    "20117f86-e985-4357-b9ee-374bc1d8487d",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "modem": [
+    "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "dsp": [
+    "7efe5010-2a1a-4a1a-b8bc-990257813512",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "devcfg": [
+    "f65d4b16-343d-4e25-aafc-be99b6556a6d",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "cmnlib": [
+    "73471795-ab54-43f9-a847-4f72ea5cbef5",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "cmnlib64": [
+    "8ea64893-1267-4a1b-947c-7c362acaad2c",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "keymaster": [
+    "a11d2a7c-d82a-4c2f-8a01-1805240e6626",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "abl": [
+    "bd6928a1-4ce0-a038-4f3a-1495e3eddffb",
+    "4114b077-005d-4e12-ac8c-b493bda684fb"
+  ],
+  "aop": [
+    "d69e90a5-4cab-0071-f6df-ab977f141a7f",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "bluetooth": [
+    "6cb747f1-c2ef-4092-add0-ca39f79c7af4",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "hyp": [
+    "e1a6a689-0c8d-4cc6-b4e8-55a4320fbd8a",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "qupfw": [
+    "21d1219f-2ed1-4ab4-930a-41a16ae75f7f",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "storsec": [
+    "02db45fe-ad1b-4cb6-aecc-0042c637defa",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "xbl": [
+    "dea0ba2c-cbdd-4805-b4f9-f428251c3e98",
+    "dea0ba2c-cbdd-4805-b4f9-f428251c3e98"
+  ],
+  "xbl_config": [
+    "5a325ae4-4276-b66d-0add-3494df27706a",
+    "5a325ae4-4276-b66d-0add-3494df27706a"
+  ],
+  "mdtp": [
+    "3878408a-e263-4b67-b878-6340b35b11e3",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "mdtpsecapp": [
+    "ea02d680-8712-4552-a3be-e6087829c1e6",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "ImageFv": [
+    "17911177-c9e6-4372-933c-804b678e666f",
+    "77036cd4-03d5-42bb-8ed1-37e5a88baa34"
+  ],
+  "lksecapp": null,
+  "vbmeta": null,
+  "vendor": null
+}
