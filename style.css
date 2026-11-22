@@ -92,3 +92,11 @@ select:disabled, #username:disabled { opacity: .62; }
 .platform-help img { display: block; max-width: 100%; height: auto; margin-block: .4rem .7rem; border-radius: 8px; }
 .guide-credit { display: block; margin-top: .8rem; color: var(--on-surface-variant); }
 @media (max-width: 520px) { .port-layouts { grid-template-columns: 1fr; } }
+
+@media (max-width: 640px) {
+  .flash-choice { grid-template-columns: minmax(0, 1fr); }
+  .branch-choice { justify-items: start; padding-inline-start: 1.9rem; }
+  .fork-fields { flex-direction: column; align-items: stretch; }
+  .fork-fields .channel { flex-direction: column; align-items: stretch; gap: .25rem; }
+  .fork-fields input { width: 100%; min-width: 0; }
+}
