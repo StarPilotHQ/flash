@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Install StarPilot AGNOS on your comma using a USB recovery connection.">
+  <meta name="description" content="USB recovery tools for your comma. Flash AGNOS, clear old data, install software, and preload your connection settings.">
   <title>StarPilot Recovery</title>
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./style.css">
@@ -19,11 +19,45 @@
       <span class="release">AGNOS <span id="version" aria-live="polite">…</span></span>
     </header>
     <h1>USB Recovery</h1>
-    <p class="lede">Install StarPilot AGNOS on your comma.</p>
+    <p class="lede">A suite of USB recovery tools for your comma.</p>
     <section aria-labelledby="connection">
       <h2 id="connection">Connect your comma</h2>
-      <p>Disconnect your comma from the car and connect its recovery USB port. Keep the same USB connection for the entire recovery.</p>
-      <a href="https://flash.comma.ai/" target="_blank" rel="noopener">View comma’s port guide</a>
+      <p>Use desktop Chrome or Edge and a standard USB-C data cable. Leave the car’s harness cable disconnected.</p>
+      <details class="connection-guide">
+        <summary>View Instructions</summary>
+        <ol class="guide-steps">
+          <li><strong>Power off your comma.</strong> Remove both cables. If it has a rear light, wait for the light to go out.</li>
+          <li>
+            <strong>Connect the computer first, then power.</strong> Match your device to one of the port diagrams. Connect port <strong>1</strong> to your computer with the data cable, then connect port <strong>2</strong> to a wall charger. The screen may stay black in recovery mode.
+            <div class="port-layouts">
+              <figure class="port-layout">
+                <figcaption><img src="./assets/recovery/rear-port-device.webp" alt="" loading="lazy"> Rear recovery port</figcaption>
+                <img class="port-diagram" src="./assets/recovery/rear-ports.svg" alt="Rear view with port 1 marked for computer data and port 2 marked for power" loading="lazy">
+              </figure>
+              <figure class="port-layout">
+                <figcaption><img src="./assets/recovery/side-port-device.webp" alt="" loading="lazy"> Side recovery port</figcaption>
+                <img class="port-diagram" src="./assets/recovery/side-ports.svg" alt="Side recovery port marked 1 for computer data, with port 2 marked for power" loading="lazy">
+              </figure>
+            </div>
+          </li>
+          <li>
+            <strong>Start recovery on this page.</strong> Choose the options you want below, click <strong>Start recovery</strong>, and select <code>QUSB_BULK</code> if the browser asks. If macOS prompts first, click <strong>Allow</strong>.
+            <details class="platform-help">
+              <summary>Windows USB driver help</summary>
+              <ol>
+                <li>Open <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener noreferrer">Zadig</a> and choose <strong>Device → Create New Device</strong>.
+                  <img src="./assets/recovery/windows-create-device.png" alt="The Create New Device menu item in Zadig" width="575" height="254" loading="lazy">
+                </li>
+                <li>Name it <code>comma recovery</code>. Enter USB ID <code>05C6:9008</code> for the rear recovery port or <code>3801:9008</code> for the side recovery port. Select <strong>WinUSB</strong>, click <strong>Install Driver</strong>, then return here.
+                  <img src="./assets/recovery/windows-driver-form.png" alt="Zadig showing the USB ID fields, WinUSB and the Install Driver button" width="575" height="254" loading="lazy">
+                </li>
+              </ol>
+            </details>
+          </li>
+          <li><strong>Wait for the USB writes to finish.</strong> Leave both cables connected while the page is writing. If your comma stays in recovery mode afterward, disconnect both cables and start it on wall power alone.</li>
+        </ol>
+        <small class="guide-credit">Device photos, port diagrams, and driver screenshots by comma.ai.</small>
+      </details>
     </section>
     <section aria-labelledby="menu-heading">
       <h2 id="menu-heading">Recovery options</h2>

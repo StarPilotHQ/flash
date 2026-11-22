@@ -16,3 +16,5 @@ Clean userdata bundles are published by the GitHub Actions workflow and served b
 AGNOS recovery is available for comma 3, comma 3X, and current AGNOS models. Older devices running NEOS use a different flow.
 
 Use the small **Other** checkbox beneath Branch to install a public GitHub fork. Enter the owner of its `openpilot` repository (renamed repositories work if GitHub retains the redirect) and an exact branch name. The browser resolves the AGNOS manifest and stages Git objects for the branch and its pinned public GitHub submodules. This clean-install path supports up to 1 GiB of Git pack data. Separate downloads such as Git LFS objects are outside that bundle. AGNOS flashing requires a boot chain compatible with the connected hardware.
+
+The expandable connection guide uses the device photos, port diagrams, and Zadig screenshots from [comma.ai’s flashing guide source](https://github.com/commaai/flash/tree/d604aa7490be4bc2bc53da128bd05dd597427cd5/src/assets).

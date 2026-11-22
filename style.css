@@ -72,3 +72,21 @@ select:disabled, #username:disabled { opacity: .62; }
 .other-choice { display: flex; align-items: center; gap: .4rem; color: var(--on-surface-variant); font-size: .82rem; }
 .other-choice input[type="checkbox"] { width: .85rem; height: .85rem; margin: 0; }
 .fork-fields { flex-wrap: wrap; }
+.connection-guide > summary, .platform-help > summary {
+  color: var(--secondary);
+  font-weight: 650;
+  cursor: pointer;
+}
+.connection-guide > summary { width: fit-content; padding-block: .2rem; }
+.connection-guide[open] > summary { margin-bottom: .8rem; }
+.guide-steps { margin: 0; }
+.guide-steps > li + li { margin-top: .85rem; }
+.port-layouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin-top: .65rem; }
+.port-layout { margin: 0; overflow: hidden; border: 1px solid var(--glass-border); border-radius: 12px; background: rgba(157, 114, 255, .08); }
+.port-layout figcaption { min-height: 3.7rem; display: flex; align-items: center; gap: .6rem; padding: .55rem .7rem; font-weight: 650; }
+.port-layout figcaption img { width: 2.5rem; height: 2.5rem; object-fit: contain; flex-shrink: 0; }
+.port-diagram { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: contain; background: #0b0916; }
+.platform-help { margin-top: .4rem; }
+.platform-help img { display: block; max-width: 100%; height: auto; margin-block: .4rem .7rem; border-radius: 8px; }
+.guide-credit { display: block; margin-top: .8rem; color: var(--on-surface-variant); }
+@media (max-width: 520px) { .port-layouts { grid-template-columns: 1fr; } }
