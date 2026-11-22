@@ -4,7 +4,9 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { flashRelease, planFlash } from './flash.js';
 import { downloadImage } from './images.js';
-import { loadRelease } from './release.js';
+import { loadForkRelease, loadRelease, verifyForkBootChain } from './release.js';
+import { resolveFork, validRef } from './github.js';
+import { stageFork } from './fork.js';
 import { imagesForDevice } from './devices.js';
 import { eraseInstallData, planClean } from './clean.js';
 import { readGpts } from './gpt.js';
@@ -15,10 +17,15 @@ const PROGRAMMER_HASH = '5e9d300470a8046c26657277b47ce0fc5de8c1168719b98311aeda0
 const $ = id => document.getElementById(id);
 const supported = Boolean(navigator.usb && navigator.storage?.getDirectory);
 const actions = ['flash', 'erase', 'install', 'preload'];
-const choices = [...actions, 'branch', 'username', 'wifi', 'wifi-name', 'wifi-password'];
+const choices = [...actions, 'branch', 'username', 'wifi', 'wifi-name', 'wifi-password', 'other', 'fork-owner', 'fork-branch'];
 let releaseCheck;
 
 function refreshRelease() {
+  if ($('other').checked) {
+    $('version').textContent = 'from fork';
+    releaseCheck = null;
+    return;
+  }
   const branch = $('branch').value;
   const check = loadRelease(branch);
   releaseCheck = check;
@@ -52,9 +59,17 @@ function updateControls(busy = false) {
   $('wifi-fields').hidden = !savingWifi;
   $('wifi-name').disabled ||= !savingWifi;
   $('wifi-password').disabled ||= !savingWifi;
+  const other = $('other').checked;
+  $('branch').disabled ||= other;
+  $('fork-fields').hidden = !other;
+  $('fork-owner').disabled ||= !other;
+  $('fork-branch').disabled ||= !other;
+  $('install-label').textContent = other ? 'Install fork' : 'Install StarPilot';
+  const needsFork = other && ($('flash').checked || (erase && $('install').checked)) &&
+    (!validUsername($('fork-owner').value.trim()) || !validRef($('fork-branch').value.trim()));
   const needsWifi = savingWifi && !validWifi({name: $('wifi-name').value, password: $('wifi-password').value});
   const needsUsername = preload && !validUsername($('username').value.trim());
-  $('start').disabled = !supported || busy || needsUsername || needsWifi || (!$('flash').checked && !erase);
+  $('start').disabled = !supported || busy || needsUsername || needsWifi || needsFork || (!$('flash').checked && !erase);
 }
 
 function guardExit(event) {
@@ -96,8 +111,18 @@ async function runRecovery(flash, erase, setup) {
       throw new Error('This device does not support StarPilot recovery');
     }
 
-    const release = flash || setup.branch ? await releaseCheck : null;
+    let release = null;
+    if (flash || setup.branch) {
+      if (setup.fork) {
+        status('Reading the selected fork and branch');
+        release = await loadForkRelease(await resolveFork(setup.fork.owner,setup.fork.branch),flash);
+        $('version').textContent = release.version ?? 'from fork';
+      } else {
+        release = await releaseCheck;
+      }
+    }
     const images = flash ? imagesForDevice(release,deviceType) : [];
+    if (flash && setup.fork) verifyForkBootChain(images,imagesForDevice(await loadRelease('stable'),deviceType));
     const plan = flash ? await planFlash(device,images,deviceType) : null;
     root = await navigator.storage.getDirectory();
     folder = 'recovery-' + crypto.randomUUID();
@@ -108,9 +133,10 @@ async function runRecovery(flash, erase, setup) {
       const tables = await readGpts(device);
       userdata = planClean(tables.flatMap(table => table.primary.parts),device.firehose).find(part => part.name === 'userdata');
       const blocks = bundleGeometry(userdata.sectors);
-      const variant = setup.branch ? release.revision : 'clean';
+      const fork = setup.fork && setup.branch ? await stageFork(release,directory,status) : null;
+      const variant = fork ? 'other' : setup.branch ? release.revision : 'clean';
       const base = new URL(`./bundles/${variant}/${blocks}/`,location.href);
-      offline = await stageUserdata(base,userdata,directory,status,setup.username,setup.wifi,blocks);
+      offline = await stageUserdata(base,userdata,directory,status,setup.username,setup.wifi,blocks,fork);
       $('wifi-password').value = '';
     }
 
@@ -138,7 +164,7 @@ async function runRecovery(flash, erase, setup) {
       await device.reset();
     }
     status(setup.branch
-      ? `USB writes complete. Your comma installs StarPilot ${setup.branch} when AGNOS boots.`
+      ? `USB writes complete. Your comma installs ${setup.fork ? release.repo + '/' + release.branch : 'StarPilot ' + setup.branch} when AGNOS boots.`
       : 'USB writes complete. Your comma is restarting.');
   } finally {
     if (root && folder) await root.removeEntry(folder,{recursive:true}).catch(() => {});
@@ -150,14 +176,17 @@ updateControls();
 refreshRelease();
 if (!supported) error('Open this page in desktop Chrome or Edge over HTTPS. This browser cannot access USB or local recovery storage.');
 for (const id of choices) $(id).addEventListener('change',() => updateControls());
-for (const id of ['username', 'wifi-name', 'wifi-password']) $(id).addEventListener('input',() => updateControls());
+for (const id of ['username', 'wifi-name', 'wifi-password', 'fork-owner', 'fork-branch']) $(id).addEventListener('input',() => updateControls());
 $('branch').addEventListener('change',refreshRelease);
+$('other').addEventListener('change',refreshRelease);
 
 $('start').addEventListener('click',async () => {
   const flash = $('flash').checked;
   const erase = $('erase').checked;
+  const fork = $('other').checked ? {owner:$('fork-owner').value.trim(), branch:$('fork-branch').value.trim()} : null;
   const setup = {
-    branch: erase && $('install').checked ? $('branch').value : null,
+    fork,
+    branch: erase && $('install').checked ? fork?.branch ?? $('branch').value : null,
     username: erase && $('preload').checked ? $('username').value.trim().toLowerCase() : null,
     wifi: erase && $('wifi').checked ? {name: $('wifi-name').value, password: $('wifi-password').value} : null,
   };

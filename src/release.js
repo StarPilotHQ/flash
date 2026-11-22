@@ -56,3 +56,29 @@ export async function loadRelease(branch) {
   }
   return {version, revision:sha, images, c3Images};
 }
+
+export async function loadForkRelease(fork, flash = true) {
+  const {github} = await import('./github.js');
+  const base = fork.revision + '/';
+  const env = await github(fork.repo, base + 'launch_env.sh', 'text');
+  const version = env?.match(/^\s*export AGNOS_VERSION=["']?(\d+(?:\.\d+)+)["']?\s*$/m)?.[1];
+  if (!flash) return {...fork, version};
+  if (!version) throw new Error('This fork does not specify an AGNOS version');
+  for (const directory of [HARDWARE, 'openpilot/system/hardware/comma',
+    'system/hardware/tici', 'openpilot/system/hardware/tici']) {
+    const json = await github(fork.repo, base + directory + '/agnos.json', 'text');
+    if (!json || /^[\w/.-]+\.json\s*$/.test(json)) continue;
+    const c3 = await github(fork.repo, base + directory + '/agnos-c3.json', 'text');
+    const images = parseImages(JSON.parse(json));
+    return {...fork, version, images, c3Images:c3 ? parseImages(JSON.parse(c3)) : images};
+  }
+  throw new Error('No supported AGNOS manifest was found in this fork');
+}
+
+export function verifyForkBootChain(images, reference) {
+  for (const image of images.slice(0,5)) {
+    if (image.hash_raw !== reference.find(entry => entry.name === image.name)?.hash_raw) {
+      throw new Error('This fork’s bootloader does not match the detected hardware. Nothing was written.');
+    }
+  }
+}

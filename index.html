@@ -29,15 +29,22 @@
       <h2 id="menu-heading">Recovery options</h2>
       <div class="choice install-choice">
         <label for="flash"><input type="checkbox" id="flash" checked> <span><strong>Flash AGNOS</strong><small>Write the selected branch’s AGNOS to the inactive boot slot.</small></span></label>
-        <label class="channel">Branch
-          <select id="branch">
-            <option value="stable">Stable</option>
-            <option value="testing">Testing</option>
-          </select>
-        </label>
+        <div class="branch-choice">
+          <label class="channel">Branch
+            <select id="branch">
+              <option value="stable">Stable</option>
+              <option value="testing">Testing</option>
+            </select>
+          </label>
+          <label class="other-choice"><input type="checkbox" id="other"> Other</label>
+        </div>
+      </div>
+      <div class="choice fork-fields" id="fork-fields" hidden>
+        <label class="channel">GitHub username <input id="fork-owner" type="text" maxlength="39" spellcheck="false" autocapitalize="none"></label>
+        <label class="channel">Branch <input id="fork-branch" type="text" maxlength="160" spellcheck="false" autocapitalize="none"></label>
       </div>
       <label class="choice"><input type="checkbox" id="erase"> <span><strong>Delete old data</strong><small>Erase installed software, settings, and cache.</small></span></label>
-      <label class="choice"><input type="checkbox" id="install"> <span><strong>Install StarPilot</strong><small>Install the latest commit on the selected branch. Requires Delete old data.</small></span></label>
+      <label class="choice"><input type="checkbox" id="install"> <span><strong id="install-label">Install StarPilot</strong><small>Install the latest commit on the selected branch. Requires Delete old data.</small></span></label>
       <div class="choice install-choice">
         <label for="preload"><input type="checkbox" id="preload"> <span><strong>Pre-load SSH key</strong><small>Give the owner of this GitHub account SSH access.</small></span></label>
         <label id="username-row" class="channel" hidden>GitHub username

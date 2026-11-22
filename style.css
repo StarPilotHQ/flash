@@ -68,3 +68,7 @@ select:disabled, #username:disabled { opacity: .62; }
 .channel input { width: 10rem; }
 #wifi-fields { display: grid; gap: .45rem; }
 #wifi-fields label { justify-content: space-between; }
+.branch-choice { display: grid; justify-items: end; gap: .25rem; }
+.other-choice { display: flex; align-items: center; gap: .4rem; color: var(--on-surface-variant); font-size: .82rem; }
+.other-choice input[type="checkbox"] { width: .85rem; height: .85rem; margin: 0; }
+.fork-fields { flex-wrap: wrap; }

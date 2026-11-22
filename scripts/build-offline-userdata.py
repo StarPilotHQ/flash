@@ -16,7 +16,7 @@ def git(repo, *args):
     return subprocess.check_output(["git", "-C", repo, *args], text=True).strip()
 
 
-def make_image(output, blocks, repo=None, branch=None):
+def make_image(output, blocks, repo=None, branch=None, fork_template=False):
     if output.exists():
         raise ValueError(f"Output already exists: {output}")
     with tempfile.TemporaryDirectory(dir=output.parent) as work:
@@ -33,6 +33,12 @@ def make_image(output, blocks, repo=None, branch=None):
         launcher = tree / "continue.sh"
         shutil.copyfile(Path(__file__).with_name("offline-continue.sh"), launcher)
         launcher.chmod(0o755)
+        if fork_template:
+            marker = b"\xa5" * 4 * 1024 * 1024
+            with (seed / "fork.pack").open("wb") as reserved:
+                for _ in range(256):
+                    reserved.write(marker)
+            shutil.copyfile(Path(__file__).with_name("offline-fork.py"), seed / "fork.py")
         if repo:
             origin = git(repo, "remote", "get-url", "origin").removesuffix(".git")
             if origin.casefold() != ORIGIN.casefold() or git(repo, "branch", "--show-current") != branch:
@@ -59,7 +65,10 @@ if __name__ == "__main__":
     parser.add_argument("--blocks", type=int, required=True, help="userdata partition size in 4096-byte sectors")
     parser.add_argument("--repo", type=Path, help="fresh shallow clone of the official branch")
     parser.add_argument("--branch", choices=["stable", "testing"])
+    parser.add_argument("--fork-template", action="store_true")
     args = parser.parse_args()
     if args.blocks < 32768 or bool(args.repo) != bool(args.branch):
         parser.error("provide at least 32768 blocks and either both --repo/--branch or neither")
-    make_image(args.output.absolute(), args.blocks, args.repo, args.branch)
+    if args.fork_template and args.repo:
+        parser.error("--fork-template cannot include a built-in repository")
+    make_image(args.output.absolute(), args.blocks, args.repo, args.branch, args.fork_template)

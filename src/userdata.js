@@ -57,13 +57,30 @@ export function planUserdata(manifest, partition, expectedBlocks = Number(partit
   return writes;
 }
 
-export async function stageUserdata(base, partition, directory, status, username, wifi, expectedBlocks) {
+export function planForkSpace(reserved, partition, blocks, writes) {
+  if (!Array.isArray(reserved) || reserved.length > 20000) throw new Error('Invalid fork userdata template');
+  const space = reserved.map(([start,count]) => {
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(count) || start < 1 ||
+        count < 1 || start + count > blocks) throw new Error('Invalid fork payload extent');
+    return {sector:partition.start + BigInt(start), length:count * SECTOR};
+  });
+  const all = [...space,...writes].sort((a,b) => a.sector < b.sector ? -1 : a.sector > b.sector ? 1 : 0);
+  if (space.reduce((sum,entry) => sum + entry.length,0) !== 1024 ** 3 ||
+      all.some((part,i) => i > 0 && all[i-1].sector + BigInt(all[i-1].length / SECTOR) > part.sector)) {
+    throw new Error('Fork payload overlaps userdata filesystem metadata');
+  }
+  return space;
+}
+
+export async function stageUserdata(base, partition, directory, status, username, wifi, expectedBlocks, fork) {
   const response = await fetch(new URL('userdata.json', base), {credentials:'omit', cache:'no-cache'});
   if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
     throw new Error('Clean recovery image is unavailable for this branch and device. No data was erased.');
   }
   const manifest = await response.json();
   const writes = planUserdata(manifest, partition, expectedBlocks);
+  const forkSpace = fork ? planForkSpace(manifest.fork,partition,manifest.blocks,writes) : [];
+  if (fork && fork.size > 1024 ** 3) throw new Error('Fork installer exceeds userdata capacity');
   const download = await fetch(new URL('userdata.bin', base), {credentials:'omit'});
   if (!download.ok || !download.body) throw new Error('Could not download the offline installer');
   const file = await directory.getFileHandle('userdata.bin', {create:true});
@@ -117,10 +134,10 @@ export async function stageUserdata(base, partition, directory, status, username
     settings = new Uint8Array(SECTOR).fill(10);
     settings.set(text);
   }
-  return {writes, payload, accessSector, settings};
+  return {writes, payload, accessSector, settings, forkSpace, fork};
 }
 
-export async function writeUserdata(firehose, partition, {writes, payload, accessSector, settings}, status) {
+export async function writeUserdata(firehose, partition, {writes, payload, accessSector, settings, forkSpace, fork}, status) {
   for (const {sector, offset, length} of writes) {
     const extent = payload.slice(offset, offset + length);
     if (!await firehose.cmdProgram(partition.lun, sector, extent)) {
@@ -132,6 +149,23 @@ export async function writeUserdata(firehose, partition, {writes, payload, acces
   const expected = new Uint8Array(await payload.slice(0, SECTOR).arrayBuffer());
   if (data.length !== SECTOR || !data.every((byte, index) => byte === expected[index])) {
     throw new Error('Offline userdata superblock verification failed');
+  }
+  if (fork) {
+    let offset = 0;
+    const aligned = new Blob([fork,new Uint8Array((SECTOR - fork.size % SECTOR) % SECTOR)]);
+    for (const {sector,length} of forkSpace) {
+      if (offset >= aligned.size) break;
+      const extent = aligned.slice(offset,offset+length);
+      if (!await firehose.cmdProgram(partition.lun,sector,extent)) throw new Error('Device rejected fork installer');
+      offset += extent.size;
+      status('Writing fork installer',offset,aligned.size);
+    }
+    if (offset !== aligned.size) throw new Error('The fork installer did not fit in userdata');
+    const saved = await firehose.cmdReadBuffer(partition.lun,forkSpace[0].sector,1);
+    const first = new Uint8Array(await aligned.slice(0,SECTOR).arrayBuffer());
+    if (saved.length !== SECTOR || !saved.every((byte,i) => byte === first[i])) {
+      throw new Error('Fork installer header did not verify');
+    }
   }
   if (settings) {
     if (!await firehose.cmdProgram(partition.lun, accessSector, new Blob([settings]))) {
