@@ -16,26 +16,32 @@
         <img class="brand-icon" src="./assets/starpilot.svg" alt="">
         <img class="wordmark" src="./assets/wordmark.png" alt="StarPilot">
       </span>
-      <span class="release">AGNOS <span id="version">20.5.3</span></span>
+      <span class="release">AGNOS <span id="version" aria-live="polite">…</span></span>
     </header>
     <h1>USB Recovery</h1>
     <p class="lede">Install StarPilot AGNOS on your comma.</p>
     <section aria-labelledby="connection">
       <h2 id="connection">Connect your comma</h2>
-      <p>For flash or erase, disconnect your comma from the car and connect its recovery USB port to this computer. For software install only, boot to AGNOS setup and connect your comma to Wi-Fi.</p>
+      <p>Disconnect your comma from the car. For flash or erase, connect its recovery USB port. For install or SSH only, boot to AGNOS setup and connect your comma to Wi-Fi.</p>
       <a href="https://flash.comma.ai/" target="_blank" rel="noopener">View comma’s port guide</a>
     </section>
     <section aria-labelledby="menu-heading">
       <h2 id="menu-heading">Recovery options</h2>
-      <label class="choice"><input type="checkbox" id="flash" checked> <span><strong>Flash AGNOS</strong><small>Write AGNOS to the inactive boot slot.</small></span></label>
-      <label class="choice"><input type="checkbox" id="erase"> <span><strong>Delete old data</strong><small>Erase installed software, settings, and cache.</small></span></label>
       <div class="choice install-choice">
-        <label for="install"><input type="checkbox" id="install"> <span><strong>Install StarPilot</strong><small>Install the latest commit on the selected branch.</small></span></label>
+        <label for="flash"><input type="checkbox" id="flash" checked> <span><strong>Flash AGNOS</strong><small>Write the selected branch’s AGNOS to the inactive boot slot.</small></span></label>
         <label class="channel">Branch
-          <select id="branch" disabled>
+          <select id="branch">
             <option value="stable">Stable</option>
             <option value="testing">Testing</option>
           </select>
+        </label>
+      </div>
+      <label class="choice"><input type="checkbox" id="erase"> <span><strong>Delete old data</strong><small>Erase installed software, settings, and cache.</small></span></label>
+      <label class="choice"><input type="checkbox" id="install"> <span><strong>Install StarPilot</strong><small>Install the latest commit on the selected branch.</small></span></label>
+      <div class="choice install-choice">
+        <label for="preload"><input type="checkbox" id="preload"> <span><strong>Pre-load SSH key</strong><small>Give the owner of this GitHub account SSH access.</small></span></label>
+        <label id="username-row" class="channel" hidden>GitHub username
+          <input id="username" type="text" maxlength="39" spellcheck="false" autocapitalize="none" autocomplete="off">
         </label>
       </div>
       <button type="button" id="start">Start recovery</button>
@@ -47,9 +53,9 @@
       <p id="error" role="alert" hidden></p>
     </section>
     <section id="after" aria-labelledby="after-heading" hidden>
-      <h2 id="after-heading">Start StarPilot</h2>
+      <h2 id="after-heading">Finish recovery</h2>
       <p id="clean-next" hidden>Confirm the System Reset on your comma to format the empty storage.</p>
-      <p id="install-next" hidden>Reconnect normal power if needed. At setup, connect to Wi-Fi. If you selected a StarPilot install, then continue using the recovery button above.</p>
+      <p id="setup-next" hidden>Reconnect normal power if needed. At AGNOS setup, connect to Wi-Fi, then click Continue recovery above.</p>
     </section>
     <section id="manual" aria-labelledby="manual-heading" hidden>
       <h2 id="manual-heading">Install from the comma screen</h2>

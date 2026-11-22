@@ -4,19 +4,31 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { flashRelease, planFlash } from './flash.js';
 import { downloadImage } from './images.js';
-import release from './release.json';
+import { loadRelease } from './release.js';
 import { imagesForDevice } from './devices.js';
 import { eraseInstallData, planClean } from './clean.js';
 import { readGpts } from './gpt.js';
-import { installBranch } from './install.js';
+import { finishSetup, validUsername } from './install.js';
 
 const PROGRAMMER = 'https://raw.githubusercontent.com/commaai/flash/d604aa7490be4bc2bc53da128bd05dd597427cd5/src/QDL/programmer.bin';
 const PROGRAMMER_HASH = '5e9d300470a8046c26657277b47ce0fc5de8c1168719b98311aeda0c3ce2e013';
 const $ = id => document.getElementById(id);
 const supported = Boolean(navigator.usb && navigator.storage?.getDirectory);
-const choices = ['flash', 'erase', 'install', 'branch'];
-let pendingBranch = null;
-$('version').textContent = release.version;
+const actions = ['flash', 'erase', 'install', 'preload'];
+const choices = [...actions, 'branch', 'username'];
+let pendingSetup = null;
+let releaseCheck;
+
+function refreshRelease() {
+  const branch = $('branch').value;
+  const check = loadRelease(branch);
+  releaseCheck = check;
+  $('version').textContent = '…';
+  check.then(
+    release => { if (releaseCheck === check) $('version').textContent = release.version; },
+    () => { if (releaseCheck === check) $('version').textContent = 'unavailable'; },
+  );
+}
 
 function status(message, bytes, total) {
   if ($('status').textContent !== message) $('status').textContent = message;
@@ -31,10 +43,12 @@ function error(reason) {
 }
 
 function updateControls(busy = false) {
-  for (const id of choices) $(id).disabled = !supported || busy || Boolean(pendingBranch);
-  $('branch').disabled ||= !$('install').checked;
-  $('start').disabled = !supported || busy || (!pendingBranch && !choices.slice(0,3).some(id => $(id).checked));
-  $('start').textContent = pendingBranch ? 'Continue installation' : 'Start recovery';
+  for (const id of choices) $(id).disabled = !supported || busy || Boolean(pendingSetup);
+  $('username-row').hidden = !$('preload').checked;
+  $('username').disabled = !supported || busy || !$('preload').checked;
+  const needsUsername = $('preload').checked && !validUsername($('username').value.trim());
+  $('start').disabled = !supported || busy || needsUsername || (!pendingSetup && !actions.some(id => $(id).checked));
+  $('start').textContent = pendingSetup ? 'Continue recovery' : 'Start recovery';
 }
 
 function guardExit(event) {
@@ -66,27 +80,33 @@ async function connectRecovery(usb) {
   return device;
 }
 
-async function finishInstall(branch) {
+async function completeSetup({branch, username}) {
   try {
-    await installBranch(branch,status);
+    await finishSetup(branch,username,status);
   } catch (reason) {
-    $('installer-link').textContent = 'starpilothq/' + branch;
-    $('manual').hidden = false;
+    if (branch && !username) {
+      $('installer-link').textContent = 'starpilothq/' + branch;
+      $('manual').hidden = false;
+    }
     throw reason;
   }
-  pendingBranch = null;
+  pendingSetup = null;
   $('after').hidden = true;
-  status('StarPilot ' + branch + ' installer started. Follow progress on your comma.');
+  status([
+    username && 'SSH keys saved for ' + username + '.',
+    branch && 'StarPilot ' + branch + ' installer started. Follow progress on your comma.',
+  ].filter(Boolean).join(' '));
 }
 
-async function runRecovery(flash, erase, branch) {
+async function runRecovery(flash, erase, setup) {
   const usb = new usbClass();
   let root, folder;
   try {
     const device = await connectRecovery(usb);
     const deviceType = String(await device.getDeviceType());
-    const images = imagesForDevice(release,deviceType);
-    const plan = await planFlash(device,images,deviceType);
+    if (!['32', '33', '34'].includes(deviceType) || device.firehose.cfg.SECTOR_SIZE_IN_BYTES !== 4096) {
+      throw new Error('This device does not support StarPilot recovery');
+    }
     async function eraseSelected() {
       const tables = await readGpts(device);
       await eraseInstallData(device,tables.flatMap(table => table.primary.parts),status);
@@ -96,6 +116,10 @@ async function runRecovery(flash, erase, branch) {
       planClean(tables.flatMap(table => table.primary.parts),device.firehose);
     }
     if (flash) {
+      status('Checking AGNOS for StarPilot ' + $('branch').value);
+      const release = await releaseCheck;
+      const images = imagesForDevice(release,deviceType);
+      const plan = await planFlash(device,images,deviceType);
       root = await navigator.storage.getDirectory();
       const {quota, usage} = await navigator.storage.estimate();
       const needed = images.reduce((sum,image) => sum+image.size,0);
@@ -110,10 +134,10 @@ async function runRecovery(flash, erase, branch) {
       status('Restarting your comma');
       await device.reset();
     }
-    pendingBranch = branch;
+    pendingSetup = setup.branch || setup.username ? setup : null;
     $('after').hidden = false;
     $('clean-next').hidden = !erase;
-    $('install-next').hidden = !branch;
+    $('setup-next').hidden = !pendingSetup;
     status(erase ? 'Old data and cache erased. The device is restarting.' : 'Verified AGNOS was written. The device is restarting.');
   } finally {
     if (root && folder) await root.removeEntry(folder,{recursive:true}).catch(() => {});
@@ -122,22 +146,29 @@ async function runRecovery(flash, erase, branch) {
 }
 
 updateControls();
+refreshRelease();
 if (!supported) error('Open this page in desktop Chrome or Edge over HTTPS. This browser cannot access USB or local recovery storage.');
 for (const id of choices) $(id).addEventListener('change',() => updateControls());
+$('username').addEventListener('input',() => updateControls());
+$('branch').addEventListener('change',refreshRelease);
 
 $('start').addEventListener('click',async () => {
-  const flash = !pendingBranch && $('flash').checked;
-  const erase = !pendingBranch && $('erase').checked;
-  const branch = pendingBranch ?? ($('install').checked ? $('branch').value : null);
+  const flash = !pendingSetup && $('flash').checked;
+  const erase = !pendingSetup && $('erase').checked;
+  const setup = {
+    branch: pendingSetup?.branch ?? ($('install').checked ? $('branch').value : null),
+    username: $('preload').checked ? $('username').value.trim().toLowerCase() : null,
+  };
   if (erase && !confirm('Erase installed software, settings, and caches on your comma? System Reset can also erase recordings. Back up anything you need first.')) return;
   updateControls(true);
   $('error').hidden = $('manual').hidden = true;
   addEventListener('beforeunload',guardExit);
   try {
-    if (flash || erase) await runRecovery(flash,erase,branch);
-    else if (branch) await finishInstall(branch);
+    if (flash) refreshRelease();
+    if (flash || erase) await runRecovery(flash,erase,setup);
+    else await completeSetup(setup);
   } catch (reason) {
-    status(flash || erase ? 'Recovery stopped' : 'Could not start the installer over USB');
+    status(flash || erase ? 'Recovery stopped' : 'Could not finish setup over USB');
     error(reason);
   } finally {
     removeEventListener('beforeunload',guardExit);
