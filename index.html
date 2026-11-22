@@ -61,17 +61,18 @@
     </section>
     <section aria-labelledby="menu-heading">
       <h2 id="menu-heading">Recovery options</h2>
-      <div class="choice install-choice">
-        <label for="flash"><input type="checkbox" id="flash" checked> <span><strong>Flash AGNOS</strong><small>Write AGNOS to the inactive boot slot. Stable and Testing are StarPilot branches. Choose Other for a different fork.</small></span></label>
+      <div class="choice flash-choice">
+        <label for="flash"><input type="checkbox" id="flash" checked> <span><strong>Flash AGNOS</strong><small>Write AGNOS to the inactive boot slot.</small></span></label>
         <div class="branch-choice">
           <label class="channel">Branch
-            <select id="branch">
+            <select id="branch" aria-describedby="branch-note">
               <option value="stable">Stable</option>
               <option value="testing">Testing</option>
             </select>
           </label>
           <label class="other-choice"><input type="checkbox" id="other"> Other</label>
         </div>
+        <small id="branch-note">Stable and Testing are StarPilot branches. Choose Other for a different fork.</small>
       </div>
       <div class="choice fork-fields" id="fork-fields" hidden>
         <label class="channel">GitHub username <input id="fork-owner" type="text" maxlength="39" spellcheck="false" autocapitalize="none"></label>
