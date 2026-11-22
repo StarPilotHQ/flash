@@ -174,3 +174,19 @@ test('requires system write acknowledgement without a second full system transfe
   await expect(flashRelease(failed.device,images,failedPlan,download,() => {})).rejects.toThrow('system_b');
   expect(failed.calls).toEqual(['write inactive boot','read inactive boot','write inactive system']);
 });
+
+test('optional erase runs after image verification and before activation', async () => {
+  const {device,calls} = fixture();
+  const plan = await planFlash(device,[image],'34');
+  await flashRelease(device,[image],plan,download,() => {},async () => { calls.push('erase'); });
+  expect(calls).toEqual(['write inactive boot','read inactive boot','erase','set boot LUN 2','reset']);
+});
+
+test('failed erase aborts a combined flash before activation and reset', async () => {
+  const {device,calls} = fixture();
+  const plan = await planFlash(device,[image],'34');
+  await expect(flashRelease(device,[image],plan,download,() => {},async () => {
+    throw new Error('Cannot erase data');
+  })).rejects.toThrow('Cannot erase data');
+  expect(calls).toEqual(['write inactive boot','read inactive boot']);
+});

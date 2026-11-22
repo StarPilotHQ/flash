@@ -22,26 +22,23 @@
     <p class="lede">Install StarPilot AGNOS on your comma.</p>
     <section aria-labelledby="connection">
       <h2 id="connection">Connect your comma</h2>
-      <ol>
-        <li>Disconnect your comma from the car and unplug all cables.</li>
-        <li>Connect the recovery USB port to this computer with a data cable. Use the port guide below to find the right port and power connection for your device.</li>
-        <li>When the USB picker opens, select your comma. The screen stays blank in recovery mode.</li>
-      </ol>
-      <div class="actions">
-        <button type="button" id="connect">Connect device</button>
-        <a href="https://flash.comma.ai/" target="_blank" rel="noopener">View comma’s port guide</a>
-      </div>
+      <p>For flash or erase, disconnect your comma from the car and connect its recovery USB port to this computer. For software install only, boot to AGNOS setup and connect your comma to Wi-Fi.</p>
+      <a href="https://flash.comma.ai/" target="_blank" rel="noopener">View comma’s port guide</a>
     </section>
     <section aria-labelledby="menu-heading">
-      <h2 id="menu-heading">Recovery menu</h2>
-      <p id="slots" hidden></p>
-      <div class="operations">
-        <button type="button" id="flash" disabled>Flash AGNOS</button>
-        <button type="button" id="erase" disabled>Delete Old Data</button>
-        <button type="button" id="stable">Install Stable</button>
-        <button type="button" id="testing">Install Testing</button>
+      <h2 id="menu-heading">Recovery options</h2>
+      <label class="choice"><input type="checkbox" id="flash" checked> <span><strong>Flash AGNOS</strong><small>Write AGNOS to the inactive boot slot.</small></span></label>
+      <label class="choice"><input type="checkbox" id="erase"> <span><strong>Delete old data</strong><small>Erase installed software, settings, and cache.</small></span></label>
+      <div class="choice install-choice">
+        <label for="install"><input type="checkbox" id="install"> <span><strong>Install StarPilot</strong><small>Install the latest commit on the selected branch.</small></span></label>
+        <label class="channel">Branch
+          <select id="branch" disabled>
+            <option value="stable">Stable</option>
+            <option value="testing">Testing</option>
+          </select>
+        </label>
       </div>
-      <p>Connect in USB recovery mode to flash or erase. To install StarPilot, boot to AGNOS setup, connect to Wi-Fi, and attach the USB data cable.</p>
+      <button type="button" id="start">Start recovery</button>
     </section>
     <section class="result" aria-labelledby="status-heading">
       <h2 id="status-heading">Recovery status</h2>
@@ -52,7 +49,7 @@
     <section id="after" aria-labelledby="after-heading" hidden>
       <h2 id="after-heading">Start StarPilot</h2>
       <p id="clean-next" hidden>Confirm the System Reset on your comma to format the empty storage.</p>
-      <p>Reconnect normal power if needed. At setup, connect to Wi-Fi and use Install Stable or Install Testing above.</p>
+      <p id="install-next" hidden>Reconnect normal power if needed. At setup, connect to Wi-Fi. If you selected a StarPilot install, then continue using the recovery button above.</p>
     </section>
     <section id="manual" aria-labelledby="manual-heading" hidden>
       <h2 id="manual-heading">Install from the comma screen</h2>

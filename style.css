@@ -56,6 +56,12 @@ progress { width: 100%; accent-color: var(--primary); }
 #error { color: #ff9cb0; white-space: pre-line; }
 code { background: rgba(157, 114, 255, .16); color: #ede4ff; padding: .15rem .35rem; border-radius: .3rem; }
 @media (max-width: 520px) { body::before { background-position: center, right -8rem top -3rem, center, center; } }
-.operations { display: flex; flex-wrap: wrap; gap: .75rem; margin: .75rem 0; }
-#erase { background: #382642; color: #ffe2eb; border: 1px solid #bf5576; }
-#erase:hover:enabled { background: #56334d; }
+#start { margin-top: 1rem; }
+.choice { display: flex; align-items: flex-start; gap: .75rem; padding: .85rem 0; border-bottom: 1px solid var(--glass-border); }
+.choice input { width: 1.15rem; height: 1.15rem; margin: .18rem 0 0; accent-color: var(--primary); flex-shrink: 0; }
+.choice small { display: block; color: var(--on-surface-variant); font-size: .92rem; margin-top: .15rem; }
+.install-choice { align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.install-choice > label:first-child { display: flex; align-items: flex-start; gap: .75rem; }
+.channel { display: flex; align-items: center; gap: .5rem; color: var(--on-surface-variant); }
+select { color: var(--on-surface); background: #221936; border: 1px solid var(--glass-border); border-radius: .55rem; font: inherit; padding: .35rem .45rem; }
+select:disabled { opacity: .62; }

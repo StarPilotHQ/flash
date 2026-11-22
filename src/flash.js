@@ -45,7 +45,7 @@ async function verify(device, {image, partition}, sectorSize, status) {
   return bytesToHex(hash.digest()) === image.hash_raw;
 }
 
-export async function flashRelease(device, images, selected, download, status) {
+export async function flashRelease(device, images, selected, download, status, beforeActivate) {
   const plan = await planFlash(device, images, selected.deviceType);
   if (plan.active !== selected.active || plan.target !== selected.target) throw new Error('The boot slot changed. Reconnect before flashing.');
   const files = new Map();
@@ -66,6 +66,7 @@ export async function flashRelease(device, images, selected, download, status) {
       throw new Error(`Read-back checksum failed for ${partition.name}`);
     }
   }
+  if (beforeActivate) await beforeActivate();
   status(`Activating slot ${plan.target.toUpperCase()}`);
   await activate(device, await readGpts(device), plan.target, plan.active);
   status('Restarting your comma');
