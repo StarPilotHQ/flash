@@ -36,8 +36,20 @@ export async function github(repo, path, type = 'json') {
   return response[type]();
 }
 
+export async function browserRef(repo, branch) {
+  if (typeof window === 'undefined') return null;
+  const url = '/fork-ref/' + repo + '?branch=' + encodeURIComponent(branch);
+  const response = await fetch(url, {credentials:'omit', signal:AbortSignal.timeout(12000)});
+  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return null;
+  const data = await response.json();
+  if (!validRepo(data.repo) || !COMMIT.test(data.revision ?? '')) throw new Error('Invalid branch information');
+  return data;
+}
+
 export async function resolveFork(owner, branch) {
   if (!validAccount(owner) || !validRef(branch)) throw new Error('Enter a GitHub username and a branch');
+  const resolved = await browserRef(owner + '/openpilot',branch);
+  if (resolved) return {...resolved,branch};
   const info = await github(owner + '/openpilot', '');
   if (!info || info.private || !validRepo(info.full_name)) throw new Error('Public GitHub repository not found at ' + owner + '/openpilot');
   const ref = await github(info.full_name, 'git/ref/heads/' + branch.split('/').map(encodeURIComponent).join('/'));

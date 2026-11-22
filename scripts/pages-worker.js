@@ -1,11 +1,49 @@
-import { COMMIT, packRequest, validRepo } from '../src/github.js';
+import { COMMIT, packRequest, validRef, validRepo } from '../src/github.js';
 
 const ROOT = 'https://github.com/StarPilotHQ/flash/releases/download/';
 const BUNDLE = /^\/bundles\/(clean|other|[a-f0-9]{40})\/(23330816|23592960)\/(userdata\.(json|bin))$/;
 
 export default {
   async fetch(request, env) {
-    const path = new URL(request.url).pathname;
+    const target = new URL(request.url);
+    const path = target.pathname;
+    if (path.startsWith('/fork-ref/')) {
+      const project = path.slice(10);
+      const branch = target.searchParams.get('branch');
+      if (request.method !== 'GET' || !validRepo(project) || !branch || !validRef(branch)) {
+        return new Response(null,{status:404});
+      }
+      const refs = await fetch('https://github.com/' + project + '.git/info/refs?service=git-upload-pack');
+      if (!refs.ok || !refs.headers.get('content-type')?.includes('git-upload-pack-advertisement')) {
+        return new Response(null,{status:404});
+      }
+      const redirected = new URL(refs.url);
+      const repo = redirected.pathname.match(/^\/(.*)\.git\/info\/refs$/)?.[1];
+      if (redirected.origin !== 'https://github.com' || !repo || !validRepo(repo)) {
+        return new Response(null,{status:502});
+      }
+      const stream = refs.body.getReader();
+      const data = new TextDecoder();
+      let pending = '';
+      let total = 0;
+      try {
+        for (let next=await stream.read(); !next.done; next=await stream.read()) {
+          total += next.value.length;
+          if (total > 4 * 1024 * 1024) break;
+          const lines = (pending + data.decode(next.value,{stream:true})).split('\n');
+          pending = lines.pop();
+          for (const line of lines) {
+            const match = line.match(/^[0-9a-f]{4}([a-f0-9]{40}) (refs\/heads\/[^\0]+)$/);
+            if (match?.[2] === 'refs/heads/' + branch) {
+              return Response.json({repo,revision:match[1]}, {headers:{'cache-control':'no-store'}});
+            }
+          }
+        }
+      } finally {
+        await stream.cancel().catch(() => {});
+      }
+      return new Response(null,{status:404});
+    }
     if (path.startsWith('/fork-pack/')) {
       const [owner, repo, revision, extra] = path.slice(11).split('/');
       const project = owner + '/' + repo;

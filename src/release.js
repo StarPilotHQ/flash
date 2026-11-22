@@ -1,3 +1,5 @@
+import {browserRef, github} from './github.js';
+
 const SOURCE = 'https://raw.githubusercontent.com/StarPilotHQ/StarPilot';
 const HARDWARE = 'openpilot/common/hardware/comma';
 const PARTITIONS = ['xbl', 'xbl_config', 'abl', 'aop', 'devcfg', 'boot', 'system'];
@@ -38,7 +40,8 @@ async function read(url, format, options = {}) {
 
 export async function loadRelease(branch) {
   if (!validBranch(branch)) throw new Error('Unknown StarPilot branch');
-  const {sha} = await read('https://api.github.com/repos/StarPilotHQ/StarPilot/commits/' + branch, 'json', {cache:'no-cache'});
+  const resolved = await browserRef('StarPilotHQ/StarPilot',branch);
+  const sha = resolved?.revision ?? (await read('https://api.github.com/repos/StarPilotHQ/StarPilot/commits/' + branch, 'json', {cache:'no-cache'})).sha;
   if (typeof sha !== 'string' || !/^[0-9a-f]{40}$/.test(sha)) throw new Error('Invalid StarPilot revision');
   const base = SOURCE + '/' + sha;
   const [env, main, c3] = await Promise.all([
@@ -58,7 +61,6 @@ export async function loadRelease(branch) {
 }
 
 export async function loadForkRelease(fork, flash = true) {
-  const {github} = await import('./github.js');
   const base = fork.revision + '/';
   const env = await github(fork.repo, base + 'launch_env.sh', 'text');
   const version = env?.match(/^\s*export AGNOS_VERSION=["']?(\d+(?:\.\d+)+)["']?\s*$/m)?.[1];
