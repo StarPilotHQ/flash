@@ -22,7 +22,7 @@
     <p class="lede">Install StarPilot AGNOS on your comma.</p>
     <section aria-labelledby="connection">
       <h2 id="connection">Connect your comma</h2>
-      <p>Disconnect your comma from the car. For flash or erase, connect its recovery USB port. For install or SSH only, boot to AGNOS setup and connect your comma to Wi-Fi.</p>
+      <p>Disconnect your comma from the car and connect its recovery USB port. Keep the same USB connection for the entire recovery.</p>
       <a href="https://flash.comma.ai/" target="_blank" rel="noopener">View comma’s port guide</a>
     </section>
     <section aria-labelledby="menu-heading">
@@ -37,12 +37,19 @@
         </label>
       </div>
       <label class="choice"><input type="checkbox" id="erase"> <span><strong>Delete old data</strong><small>Erase installed software, settings, and cache.</small></span></label>
-      <label class="choice"><input type="checkbox" id="install"> <span><strong>Install StarPilot</strong><small>Install the latest commit on the selected branch.</small></span></label>
+      <label class="choice"><input type="checkbox" id="install"> <span><strong>Install StarPilot</strong><small>Install the latest commit on the selected branch. Requires Delete old data.</small></span></label>
       <div class="choice install-choice">
         <label for="preload"><input type="checkbox" id="preload"> <span><strong>Pre-load SSH key</strong><small>Give the owner of this GitHub account SSH access.</small></span></label>
         <label id="username-row" class="channel" hidden>GitHub username
           <input id="username" type="text" maxlength="39" spellcheck="false" autocapitalize="none" autocomplete="off">
         </label>
+      </div>
+      <div class="choice install-choice">
+        <label for="wifi"><input type="checkbox" id="wifi" disabled> <span><strong>Save a Wi-Fi network</strong><small>Supports WPA2 Personal. Requires Delete old data.</small></span></label>
+        <div id="wifi-fields" hidden>
+          <label class="channel">Network name <input id="wifi-name" type="text" spellcheck="false" autocomplete="off"></label>
+          <label class="channel">Wi-Fi password <input id="wifi-password" type="password" maxlength="64" autocomplete="off"></label>
+        </div>
       </div>
       <button type="button" id="start">Start recovery</button>
     </section>
@@ -51,15 +58,6 @@
       <p id="status" role="status" aria-live="polite">Waiting for a USB connection.</p>
       <progress id="progress" aria-label="Current operation progress" max="100" hidden></progress>
       <p id="error" role="alert" hidden></p>
-    </section>
-    <section id="after" aria-labelledby="after-heading" hidden>
-      <h2 id="after-heading">Finish recovery</h2>
-      <p id="clean-next" hidden>Confirm the System Reset on your comma to format the empty storage.</p>
-      <p id="setup-next" hidden>Reconnect normal power if needed. At AGNOS setup, connect to Wi-Fi, then click Continue recovery above.</p>
-    </section>
-    <section id="manual" aria-labelledby="manual-heading" hidden>
-      <h2 id="manual-heading">Install from the comma screen</h2>
-      <p>In AGNOS setup, choose Custom Software and enter <code id="installer-link"></code>.</p>
     </section>
   </main>
 </body>

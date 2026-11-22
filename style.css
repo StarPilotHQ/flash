@@ -63,6 +63,8 @@ code { background: rgba(157, 114, 255, .16); color: #ede4ff; padding: .15rem .35
 .install-choice { align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .install-choice > label:first-child { display: flex; align-items: flex-start; gap: .75rem; }
 .channel { display: flex; align-items: center; gap: .5rem; color: var(--on-surface-variant); }
-select, #username { color: var(--on-surface); background: #221936; border: 1px solid var(--glass-border); border-radius: .55rem; font: inherit; padding: .35rem .45rem; }
+select, .channel input { color: var(--on-surface); background: #221936; border: 1px solid var(--glass-border); border-radius: .55rem; font: inherit; padding: .35rem .45rem; }
 select:disabled, #username:disabled { opacity: .62; }
-#username { width: 10rem; }
+.channel input { width: 10rem; }
+#wifi-fields { display: grid; gap: .45rem; }
+#wifi-fields label { justify-content: space-between; }

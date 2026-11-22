@@ -1,0 +1,29 @@
+name: Publish USB recovery bundles
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '4,19,34,49 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [clean, stable, testing]
+    concurrency:
+      group: offline-v1-${{ matrix.variant }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VARIANT: ${{ matrix.variant }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish missing bundle
+        shell: bash
+        run: scripts/publish-offline-bundle.sh "$VARIANT"

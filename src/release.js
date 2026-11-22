@@ -54,5 +54,5 @@ export async function loadRelease(branch) {
   if (abl(c3Images) === NEWER_ABL || abl(c3Images) === abl(images)) {
     throw new Error('AGNOS bootloader manifests do not match the supported hardware families');
   }
-  return {version, images, c3Images};
+  return {version, revision:sha, images, c3Images};
 }

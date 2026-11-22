@@ -8,15 +8,14 @@ import { loadRelease } from './release.js';
 import { imagesForDevice } from './devices.js';
 import { eraseInstallData, planClean } from './clean.js';
 import { readGpts } from './gpt.js';
-import { finishSetup, validUsername } from './install.js';
+import { bundleGeometry, stageUserdata, validUsername, validWifi, writeUserdata } from './userdata.js';
 
 const PROGRAMMER = 'https://raw.githubusercontent.com/commaai/flash/d604aa7490be4bc2bc53da128bd05dd597427cd5/src/QDL/programmer.bin';
 const PROGRAMMER_HASH = '5e9d300470a8046c26657277b47ce0fc5de8c1168719b98311aeda0c3ce2e013';
 const $ = id => document.getElementById(id);
 const supported = Boolean(navigator.usb && navigator.storage?.getDirectory);
 const actions = ['flash', 'erase', 'install', 'preload'];
-const choices = [...actions, 'branch', 'username'];
-let pendingSetup = null;
+const choices = [...actions, 'branch', 'username', 'wifi', 'wifi-name', 'wifi-password'];
 let releaseCheck;
 
 function refreshRelease() {
@@ -43,12 +42,19 @@ function error(reason) {
 }
 
 function updateControls(busy = false) {
-  for (const id of choices) $(id).disabled = !supported || busy || Boolean(pendingSetup);
-  $('username-row').hidden = !$('preload').checked;
-  $('username').disabled = !supported || busy || !$('preload').checked;
-  const needsUsername = $('preload').checked && !validUsername($('username').value.trim());
-  $('start').disabled = !supported || busy || needsUsername || (!pendingSetup && !actions.some(id => $(id).checked));
-  $('start').textContent = pendingSetup ? 'Continue recovery' : 'Start recovery';
+  for (const id of choices) $(id).disabled = !supported || busy;
+  const erase = $('erase').checked;
+  for (const id of ['install', 'preload', 'wifi']) $(id).disabled ||= !erase;
+  const preload = erase && $('preload').checked;
+  const savingWifi = erase && $('wifi').checked;
+  $('username-row').hidden = !preload;
+  $('username').disabled ||= !preload;
+  $('wifi-fields').hidden = !savingWifi;
+  $('wifi-name').disabled ||= !savingWifi;
+  $('wifi-password').disabled ||= !savingWifi;
+  const needsWifi = savingWifi && !validWifi({name: $('wifi-name').value, password: $('wifi-password').value});
+  const needsUsername = preload && !validUsername($('username').value.trim());
+  $('start').disabled = !supported || busy || needsUsername || needsWifi || (!$('flash').checked && !erase);
 }
 
 function guardExit(event) {
@@ -80,24 +86,6 @@ async function connectRecovery(usb) {
   return device;
 }
 
-async function completeSetup({branch, username}) {
-  try {
-    await finishSetup(branch,username,status);
-  } catch (reason) {
-    if (branch && !username) {
-      $('installer-link').textContent = 'starpilothq/' + branch;
-      $('manual').hidden = false;
-    }
-    throw reason;
-  }
-  pendingSetup = null;
-  $('after').hidden = true;
-  status([
-    username && 'SSH keys saved for ' + username + '.',
-    branch && 'StarPilot ' + branch + ' installer started. Follow progress on your comma.',
-  ].filter(Boolean).join(' '));
-}
-
 async function runRecovery(flash, erase, setup) {
   const usb = new usbClass();
   let root, folder;
@@ -107,38 +95,51 @@ async function runRecovery(flash, erase, setup) {
     if (!['32', '33', '34'].includes(deviceType) || device.firehose.cfg.SECTOR_SIZE_IN_BYTES !== 4096) {
       throw new Error('This device does not support StarPilot recovery');
     }
-    async function eraseSelected() {
-      const tables = await readGpts(device);
-      await eraseInstallData(device,tables.flatMap(table => table.primary.parts),status);
-    }
+
+    const release = flash || setup.branch ? await releaseCheck : null;
+    const images = flash ? imagesForDevice(release,deviceType) : [];
+    const plan = flash ? await planFlash(device,images,deviceType) : null;
+    root = await navigator.storage.getDirectory();
+    folder = 'recovery-' + crypto.randomUUID();
+    const directory = await root.getDirectoryHandle(folder,{create:true});
+
+    let offline, userdata;
     if (erase) {
       const tables = await readGpts(device);
-      planClean(tables.flatMap(table => table.primary.parts),device.firehose);
+      userdata = planClean(tables.flatMap(table => table.primary.parts),device.firehose).find(part => part.name === 'userdata');
+      const blocks = bundleGeometry(userdata.sectors);
+      const variant = setup.branch ? release.revision : 'clean';
+      const base = new URL(`./bundles/${variant}/${blocks}/`,location.href);
+      offline = await stageUserdata(base,userdata,directory,status,setup.username,setup.wifi,blocks);
+      $('wifi-password').value = '';
     }
+
+    async function replaceUserdata() {
+      const tables = await readGpts(device);
+      const parts = tables.flatMap(table => table.primary.parts);
+      const actual = planClean(parts,device.firehose).find(part => part.name === 'userdata');
+      if (actual.lun !== userdata.lun || actual.start !== userdata.start || actual.sectors !== userdata.sectors) {
+        throw new Error('Userdata changed before recovery could write it');
+      }
+      await eraseInstallData(device,parts,status);
+      await writeUserdata(device.firehose,userdata,offline,status);
+    }
+
     if (flash) {
-      status('Checking AGNOS for StarPilot ' + $('branch').value);
-      const release = await releaseCheck;
-      const images = imagesForDevice(release,deviceType);
-      const plan = await planFlash(device,images,deviceType);
-      root = await navigator.storage.getDirectory();
       const {quota, usage} = await navigator.storage.estimate();
       const needed = images.reduce((sum,image) => sum+image.size,0);
       if (Number.isFinite(quota) && Number.isFinite(usage) && quota-usage<needed) {
         throw new Error('Free at least 5 GB of browser storage before flashing.');
       }
-      folder = 'recovery-' + crypto.randomUUID();
-      const directory = await root.getDirectoryHandle(folder,{create:true});
-      await flashRelease(device,images,plan,image => downloadImage(image,directory,status),status,erase ? eraseSelected : undefined);
+      await flashRelease(device,images,plan,image => downloadImage(image,directory,status),status,erase ? replaceUserdata : undefined);
     } else {
-      await eraseSelected();
+      await replaceUserdata();
       status('Restarting your comma');
       await device.reset();
     }
-    pendingSetup = setup.branch || setup.username ? setup : null;
-    $('after').hidden = false;
-    $('clean-next').hidden = !erase;
-    $('setup-next').hidden = !pendingSetup;
-    status(erase ? 'Old data and cache erased. The device is restarting.' : 'Verified AGNOS was written. The device is restarting.');
+    status(setup.branch
+      ? `USB writes complete. Your comma installs StarPilot ${setup.branch} when AGNOS boots.`
+      : 'USB writes complete. Your comma is restarting.');
   } finally {
     if (root && folder) await root.removeEntry(folder,{recursive:true}).catch(() => {});
     if (usb.device?.opened) await usb.device.close().catch(() => {});
@@ -149,26 +150,26 @@ updateControls();
 refreshRelease();
 if (!supported) error('Open this page in desktop Chrome or Edge over HTTPS. This browser cannot access USB or local recovery storage.');
 for (const id of choices) $(id).addEventListener('change',() => updateControls());
-$('username').addEventListener('input',() => updateControls());
+for (const id of ['username', 'wifi-name', 'wifi-password']) $(id).addEventListener('input',() => updateControls());
 $('branch').addEventListener('change',refreshRelease);
 
 $('start').addEventListener('click',async () => {
-  const flash = !pendingSetup && $('flash').checked;
-  const erase = !pendingSetup && $('erase').checked;
+  const flash = $('flash').checked;
+  const erase = $('erase').checked;
   const setup = {
-    branch: pendingSetup?.branch ?? ($('install').checked ? $('branch').value : null),
-    username: $('preload').checked ? $('username').value.trim().toLowerCase() : null,
+    branch: erase && $('install').checked ? $('branch').value : null,
+    username: erase && $('preload').checked ? $('username').value.trim().toLowerCase() : null,
+    wifi: erase && $('wifi').checked ? {name: $('wifi-name').value, password: $('wifi-password').value} : null,
   };
-  if (erase && !confirm('Erase installed software, settings, and caches on your comma? System Reset can also erase recordings. Back up anything you need first.')) return;
+  if (erase && !confirm('Erase installed software, settings, and recordings stored on userdata? Back up anything you need first.')) return;
   updateControls(true);
-  $('error').hidden = $('manual').hidden = true;
+  $('error').hidden = true;
   addEventListener('beforeunload',guardExit);
   try {
-    if (flash) refreshRelease();
-    if (flash || erase) await runRecovery(flash,erase,setup);
-    else await completeSetup(setup);
+    if (flash || setup.branch) refreshRelease();
+    await runRecovery(flash,erase,setup);
   } catch (reason) {
-    status(flash || erase ? 'Recovery stopped' : 'Could not finish setup over USB');
+    status('Recovery stopped');
     error(reason);
   } finally {
     removeEventListener('beforeunload',guardExit);

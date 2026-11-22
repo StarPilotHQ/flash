@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { copyFile, cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 
 await mkdir('dist', {recursive: true});
-await copyFile('style.css', 'dist/style.css');
+await Promise.all([copyFile('style.css', 'dist/style.css'), copyFile('scripts/pages-worker.js', 'dist/_worker.js')]);
 await cp('assets', 'dist/assets', {recursive: true});
 const result = await Bun.build({entrypoints: ['src/app.js'], outdir: 'dist', target: 'browser', minify: true});
 if (!result.success) throw new AggregateError(result.logs, 'Build failed');
