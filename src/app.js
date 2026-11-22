@@ -10,7 +10,7 @@ import { stageFork } from './fork.js';
 import { imagesForDevice } from './devices.js';
 import { eraseInstallData, planClean } from './clean.js';
 import { readGpts } from './gpt.js';
-import { bundleGeometry, stageUserdata, validUsername, validWifi, writeUserdata } from './userdata.js';
+import { BundleUnavailable, bundleGeometry, stageUserdata, validUsername, validWifi, writeUserdata } from './userdata.js';
 
 const PROGRAMMER = 'https://raw.githubusercontent.com/commaai/flash/d604aa7490be4bc2bc53da128bd05dd597427cd5/src/QDL/programmer.bin';
 const PROGRAMMER_HASH = '5e9d300470a8046c26657277b47ce0fc5de8c1168719b98311aeda0c3ce2e013';
@@ -133,10 +133,21 @@ async function runRecovery(flash, erase, setup) {
       const tables = await readGpts(device);
       userdata = planClean(tables.flatMap(table => table.primary.parts),device.firehose).find(part => part.name === 'userdata');
       const blocks = bundleGeometry(userdata.sectors);
-      const fork = setup.fork && setup.branch ? await stageFork(release,directory,status) : null;
-      const variant = fork ? 'other' : setup.branch ? release.revision : 'clean';
-      const base = new URL(`./bundles/${variant}/${blocks}/`,location.href);
-      offline = await stageUserdata(base,userdata,directory,status,setup.username,setup.wifi,blocks,fork);
+      const stage = (variant, fork) => stageUserdata(
+        new URL(`./bundles/${variant}/${blocks}/`,location.href),
+        userdata,directory,status,setup.username,setup.wifi,blocks,fork,
+      );
+      if (setup.fork && setup.branch) {
+        offline = await stage('other',await stageFork(release,directory,status));
+      } else {
+        try {
+          offline = await stage(setup.branch ? release.revision : 'clean');
+        } catch (cause) {
+          if (!setup.branch || !(cause instanceof BundleUnavailable)) throw cause;
+          const fork = {repo:'StarPilotHQ/StarPilot',branch:setup.branch,revision:release.revision};
+          offline = await stage('other',await stageFork(fork,directory,status));
+        }
+      }
       $('wifi-password').value = '';
     }
 

@@ -6,6 +6,8 @@ const MAX_EXTENT = 1024;
 const encoder = new TextEncoder();
 const GIB_SECTORS = 262144n;
 
+export class BundleUnavailable extends Error {}
+
 export function bundleGeometry(sectors) {
   const size = sectors / GIB_SECTORS;
   if (size < 89n) throw new Error('This userdata size has no supported clean recovery image');
@@ -74,9 +76,10 @@ export function planForkSpace(reserved, partition, blocks, writes) {
 
 export async function stageUserdata(base, partition, directory, status, username, wifi, expectedBlocks, fork) {
   const response = await fetch(new URL('userdata.json', base), {credentials:'omit', cache:'no-cache'});
-  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
-    throw new Error('Clean recovery image is unavailable for this branch and device. No data was erased.');
+  if (response.status === 404 || (response.ok && !response.headers.get('content-type')?.includes('application/json'))) {
+    throw new BundleUnavailable('Clean recovery image is unavailable for this branch and device. No data was erased.');
   }
+  if (!response.ok) throw new Error('Could not download clean recovery metadata (HTTP ' + response.status + ')');
   const manifest = await response.json();
   const writes = planUserdata(manifest, partition, expectedBlocks);
   const forkSpace = fork ? planForkSpace(manifest.fork,partition,manifest.blocks,writes) : [];
