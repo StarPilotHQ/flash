@@ -19,21 +19,37 @@ const supported = Boolean(navigator.usb && navigator.storage?.getDirectory);
 const actions = ['flash', 'erase', 'install', 'preload'];
 const choices = [...actions, 'branch', 'username', 'wifi', 'wifi-name', 'wifi-password', 'other', 'fork-owner', 'fork-branch'];
 let releaseCheck;
+let releaseTimer;
 
-function refreshRelease() {
-  if ($('other').checked) {
-    $('version').textContent = 'from fork';
-    releaseCheck = null;
+function selectedFork() {
+  return $('other').checked ? {owner:$('fork-owner').value.trim(), branch:$('fork-branch').value.trim()} : null;
+}
+
+function refreshRelease(delay = 0) {
+  clearTimeout(releaseTimer);
+  releaseCheck = null;
+  const fork = selectedFork();
+  if (fork && (!validUsername(fork.owner) || !validRef(fork.branch))) {
+    $('version').textContent = '—';
     return;
   }
   const branch = $('branch').value;
-  const check = loadRelease(branch);
-  releaseCheck = check;
+  const flash = $('flash').checked;
   $('version').textContent = '…';
-  check.then(
-    release => { if (releaseCheck === check) $('version').textContent = release.version; },
-    () => { if (releaseCheck === check) $('version').textContent = 'unavailable'; },
-  );
+  function lookup() {
+    const check = fork ? resolveFork(fork.owner,fork.branch).then(target => loadForkRelease(target,flash)) : loadRelease(branch);
+    releaseCheck = check;
+    check.then(
+      release => { if (releaseCheck === check) $('version').textContent = release.version ?? 'unavailable'; },
+      () => {
+        if (releaseCheck !== check) return;
+        releaseCheck = null;
+        $('version').textContent = 'unavailable';
+      },
+    );
+  }
+  if (delay) releaseTimer = setTimeout(lookup,delay);
+  else lookup();
 }
 
 function status(message, bytes, total) {
@@ -101,7 +117,7 @@ async function connectRecovery(usb) {
   return device;
 }
 
-async function runRecovery(flash, erase, setup) {
+async function runRecovery(flash, erase, setup, selectedRelease) {
   const usb = new usbClass();
   let root, folder;
   try {
@@ -111,16 +127,7 @@ async function runRecovery(flash, erase, setup) {
       throw new Error('This device does not support StarPilot recovery');
     }
 
-    let release = null;
-    if (flash || setup.branch) {
-      if (setup.fork) {
-        status('Reading the selected fork and branch');
-        release = await loadForkRelease(await resolveFork(setup.fork.owner,setup.fork.branch),flash);
-        $('version').textContent = release.version ?? 'from fork';
-      } else {
-        release = await releaseCheck;
-      }
-    }
+    const release = await selectedRelease;
     const images = flash ? imagesForDevice(release,deviceType) : [];
     if (flash && setup.fork) verifyForkBootChain(images,imagesForDevice(await loadRelease('stable'),deviceType));
     const plan = flash ? await planFlash(device,images,deviceType) : null;
@@ -188,13 +195,14 @@ refreshRelease();
 if (!supported) error('Open this page in desktop Chrome or Edge over HTTPS. This browser cannot access USB or local recovery storage.');
 for (const id of choices) $(id).addEventListener('change',() => updateControls());
 for (const id of ['username', 'wifi-name', 'wifi-password', 'fork-owner', 'fork-branch']) $(id).addEventListener('input',() => updateControls());
-$('branch').addEventListener('change',refreshRelease);
-$('other').addEventListener('change',refreshRelease);
+for (const id of ['branch', 'other']) $(id).addEventListener('change',() => refreshRelease());
+for (const id of ['fork-owner', 'fork-branch']) $(id).addEventListener('input',() => refreshRelease(350));
+$('flash').addEventListener('change',() => { if (selectedFork()) refreshRelease(); });
 
 $('start').addEventListener('click',async () => {
   const flash = $('flash').checked;
   const erase = $('erase').checked;
-  const fork = $('other').checked ? {owner:$('fork-owner').value.trim(), branch:$('fork-branch').value.trim()} : null;
+  const fork = selectedFork();
   const setup = {
     fork,
     branch: erase && $('install').checked ? fork?.branch ?? $('branch').value : null,
@@ -206,8 +214,8 @@ $('start').addEventListener('click',async () => {
   $('error').hidden = true;
   addEventListener('beforeunload',guardExit);
   try {
-    if (flash || setup.branch) refreshRelease();
-    await runRecovery(flash,erase,setup);
+    if ((flash || setup.branch) && !releaseCheck) refreshRelease();
+    await runRecovery(flash,erase,setup,flash || setup.branch ? releaseCheck : null);
   } catch (reason) {
     status('Recovery stopped');
     error(reason);
