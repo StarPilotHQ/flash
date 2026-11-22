@@ -5,6 +5,7 @@ import {buf as crc32} from 'crc-32';
 import {flashRelease, planFlash} from './flash.js';
 import {downloadImage, unpack} from './images.js';
 import {imagesForDevice} from './devices.js';
+import {errorReport} from './diagnostics.js';
 
 const imageBytes = new Uint8Array(4096).fill(23);
 const digest = bytesToHex(sha256(imageBytes));
@@ -98,6 +99,39 @@ test('blocks an unknown device or invalid target before writing', async () => {
     await expect(planFlash(device,[image],'34')).rejects.toThrow();
     expect(calls).toEqual([]);
   }
+});
+
+test('logs GPT byte counts, checksums, and USB errors without writing', async () => {
+  for (const failure of ['byte-count', 'checksum', 'usb-read']) {
+    const {device,calls} = fixture();
+    const {firehose} = device;
+    const read = firehose.cmdReadBuffer;
+    firehose.cmdReadBuffer = async (lun,lba,sectors) => {
+      const bytes = await read(lun,lba,sectors);
+      if (lun !== 4 || lba !== 98n) return bytes;
+      if (failure === 'usb-read') throw new Error('USB transfer failed');
+      if (failure === 'byte-count') return bytes.slice(0, 128);
+      bytes[16] ^= 1;
+      return bytes;
+    };
+    const reason = await planFlash(device,[image],'34').catch(error => error);
+    const log = JSON.parse(errorReport({steps:[]},reason));
+    expect(log.error.gpt).toMatchObject({lun:4,table:'backup',section:'entries',failure,
+      headerLba:'99',lba:'98',expectedBytes:4096});
+    if (failure === 'byte-count') expect(log.error.gpt.receivedBytes).toBe(128);
+    if (failure === 'checksum') expect(log.error.gpt.actualCrc32).not.toBe(log.error.gpt.expectedCrc32);
+    if (failure === 'usb-read') expect(log.error.cause).toBe('USB transfer failed');
+    expect(calls).toEqual([]);
+  }
+});
+
+test('excludes setup values and resource URLs from the error report', () => {
+  const secret = 'wifi-test-secret';
+  const ssid = 'private-network';
+  const username = 'private-user';
+  const log = errorReport({steps:[{message:ssid}]}, new Error(`${secret} https://example.org/?token=private-token`,
+    {cause:new Error(username)}), [secret,ssid,username]);
+  for (const value of [secret,ssid,username,'private-token']) expect(log).not.toContain(value);
 });
 
 test('a bad download leaves the device untouched', async () => {

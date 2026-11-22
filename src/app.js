@@ -10,6 +10,7 @@ import { stageFork } from './fork.js';
 import { imagesForDevice } from './devices.js';
 import { eraseInstallData, planClean } from './clean.js';
 import { readGpts } from './gpt.js';
+import { errorReport } from './diagnostics.js';
 import { BundleUnavailable, bundleGeometry, stageUserdata, validUsername, validWifi, writeUserdata } from './userdata.js';
 
 const PROGRAMMER = 'https://raw.githubusercontent.com/commaai/flash/d604aa7490be4bc2bc53da128bd05dd597427cd5/src/QDL/programmer.bin';
@@ -20,6 +21,13 @@ const actions = ['flash', 'erase', 'install', 'preload'];
 const choices = [...actions, 'branch', 'username', 'wifi', 'wifi-name', 'wifi-password', 'other', 'fork-owner', 'fork-branch'];
 let releaseCheck;
 let releaseTimer;
+let attempt;
+let savedErrorLog;
+
+function reportContext() {
+  return {startedAt:new Date().toISOString(), build:new URL(import.meta.url).searchParams.get('v'),
+    browser:navigator.userAgent, steps:[]};
+}
 
 function selectedFork() {
   return $('other').checked ? {owner:$('fork-owner').value.trim(), branch:$('fork-branch').value.trim()} : null;
@@ -53,12 +61,22 @@ function refreshRelease(delay = 0) {
 }
 
 function status(message, bytes, total) {
+  if (attempt) {
+    const step = {message, ...(total ? {completed:bytes, total} : {})};
+    if (attempt.steps.at(-1)?.message === message) attempt.steps[attempt.steps.length - 1] = step;
+    else {
+      attempt.steps.push(step);
+      if (attempt.steps.length > 30) attempt.steps.shift();
+    }
+  }
   if ($('status').textContent !== message) $('status').textContent = message;
   $('progress').hidden = !total;
   if (total) $('progress').value = bytes / total * 100;
 }
 
-function error(reason) {
+function error(reason, secrets) {
+  savedErrorLog = errorReport(attempt ?? reportContext(), reason, secrets);
+  $('download-error-log').hidden = false;
   $('error').textContent = reason?.message ?? String(reason);
   $('error').hidden = false;
   $('progress').hidden = true;
@@ -100,21 +118,27 @@ async function connectRecovery(usb) {
   const allowed = (await navigator.usb.getDevices()).filter(d =>
     filters.some(f => f.vendorId === d.vendorId && f.productId === d.productId));
   usb.device = allowed.length === 1 ? allowed[0] : await navigator.usb.requestDevice({filters});
+  attempt.usb = {vendorId:usb.device.vendorId, productId:usb.device.productId, phase:'open'};
   await usb.device.open();
+  attempt.usb.phase = 'configuration';
   await usb.device.selectConfiguration(1);
   const endpoints = usb.device.configuration.interfaces.find(i => i.interfaceNumber === 0)?.alternate.endpoints ?? [];
   usb.epIn = endpoints.find(e => e.direction === 'in' && e.type === 'bulk');
   usb.epOut = endpoints.find(e => e.direction === 'out' && e.type === 'bulk');
   if (endpoints.length !== 2 || !usb.epIn || !usb.epOut) throw new Error('Unexpected USB recovery interface');
   usb.maxSize = usb.epIn.packetSize;
+  Object.assign(attempt.usb,{inputPacketBytes:usb.epIn.packetSize, outputPacketBytes:usb.epOut.packetSize});
   await usb.device.claimInterface(0);
+  attempt.usb.phase = 'download programmer';
   status('Checking the device and its storage');
   const response = await fetch(PROGRAMMER, {credentials:'omit'});
   if (!response.ok) throw new Error('Could not download the comma USB programmer');
   const programmer = await response.arrayBuffer();
   if (bytesToHex(sha256(new Uint8Array(programmer))) !== PROGRAMMER_HASH) throw new Error('The USB programmer checksum does not match');
+  attempt.usb.phase = 'programmer handshake';
   const device = new qdlDevice(programmer);
   await device.connect(usb);
+  Object.assign(attempt.usb, {phase:'connected', sectorBytes:device.firehose.cfg.SECTOR_SIZE_IN_BYTES, luns:device.firehose.luns});
   return device;
 }
 
@@ -124,14 +148,17 @@ async function runRecovery(flash, erase, setup, selectedRelease) {
   try {
     const device = await connectRecovery(usb);
     const deviceType = String(await device.getDeviceType());
+    attempt.deviceType = deviceType;
     if (!['32', '33', '34'].includes(deviceType) || device.firehose.cfg.SECTOR_SIZE_IN_BYTES !== 4096) {
       throw new Error('This device does not support StarPilot recovery');
     }
 
     const release = await selectedRelease;
+    if (release) Object.assign(attempt.release, {agnos:release.version, revision:release.revision});
     const images = flash ? imagesForDevice(release,deviceType) : [];
     if (flash && setup.fork) verifyForkBootChain(images,imagesForDevice(await loadRelease('stable'),deviceType));
     const plan = flash ? await planFlash(device,images,deviceType) : null;
+    if (plan) attempt.slots = {active:plan.active, target:plan.target};
     root = await navigator.storage.getDirectory();
     folder = 'recovery-' + crypto.randomUUID();
     const directory = await root.getDirectoryHandle(folder,{create:true});
@@ -199,6 +226,15 @@ for (const id of ['username', 'wifi-name', 'wifi-password', 'fork-owner', 'fork-
 for (const id of ['branch', 'other']) $(id).addEventListener('change',() => refreshRelease());
 for (const id of ['fork-owner', 'fork-branch']) $(id).addEventListener('input',() => refreshRelease(350));
 $('flash').addEventListener('change',() => { if (selectedFork()) refreshRelease(); });
+$('download-error-log').addEventListener('click', () => {
+  if (!savedErrorLog) return;
+  const url = URL.createObjectURL(new Blob([savedErrorLog], {type:'application/json'}));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'ground-control-error.json';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
 
 $('start').addEventListener('click',async () => {
   const flash = $('flash').checked;
@@ -211,6 +247,12 @@ $('start').addEventListener('click',async () => {
     wifi: erase && $('wifi').checked ? {name: $('wifi-name').value, password: $('wifi-password').value} : null,
   };
   if (erase && !confirm('Erase installed software, settings, and recordings stored on userdata? Back up anything you need first.')) return;
+  attempt = {...reportContext(),
+    operations:{flash, erase, install:Boolean(setup.branch), preloadSsh:Boolean(setup.username), saveWifi:Boolean(setup.wifi)},
+    release:{repo:fork ? fork.owner + '/openpilot' : 'StarPilotHQ/StarPilot', branch:fork?.branch ?? $('branch').value},
+  };
+  savedErrorLog = undefined;
+  $('download-error-log').hidden = true;
   updateControls(true);
   $('error').hidden = true;
   addEventListener('beforeunload',guardExit);
@@ -218,9 +260,10 @@ $('start').addEventListener('click',async () => {
     if ((flash || setup.branch) && !releaseCheck) refreshRelease();
     await runRecovery(flash,erase,setup,flash || setup.branch ? releaseCheck : null);
   } catch (reason) {
+    error(reason, [setup.username, setup.wifi?.name, setup.wifi?.password]);
     status('Recovery stopped');
-    error(reason);
   } finally {
+    attempt = undefined;
     removeEventListener('beforeunload',guardExit);
     updateControls();
   }
