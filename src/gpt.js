@@ -37,7 +37,7 @@ async function readGptSectors(firehose, details, section, lba, sectors) {
   }
 }
 
-async function readTable(firehose, lun, lba, table) {
+async function readTable(firehose, lun, lba, table, primary) {
   const details = {lun, table, headerLba:String(lba)};
   const header = await readGptSectors(firehose, details, 'header', lba, 1);
   if (header.length !== SECTOR || new TextDecoder().decode(header.subarray(0,8)) !== 'EFI PART') {
@@ -78,11 +78,17 @@ async function readTable(firehose, lun, lba, table) {
   const expectedCrc32 = h.getUint32(88,true);
   const actualCrc32 = crc32(data.subarray(0,count * entrySize)) >>> 0;
   if (data.length !== sectors * SECTOR || actualCrc32 !== expectedCrc32) {
-    throw gptFailure(`Invalid GPT entries on LUN ${lun}`, {
-      ...entries, section:'entries', failure:data.length !== sectors * SECTOR ? 'byte-count' : 'checksum',
-      lba:String(firstEntry), sectors, expectedBytes:sectors * SECTOR, receivedBytes:data.length,
-      expectedCrc32, actualCrc32,
-    });
+    if (primary && data.length === sectors * SECTOR && count === primary.count && alternate === 1n
+        && low === primary.h.getBigUint64(40,true) && high === primary.h.getBigUint64(48,true)
+        && firstEntry > high && firstEntry + BigInt(sectors) <= current) {
+      data.set(primary.data);
+    } else {
+      throw gptFailure(`Invalid GPT entries on LUN ${lun}`, {
+        ...entries, section:'entries', failure:data.length !== sectors * SECTOR ? 'byte-count' : 'checksum',
+        lba:String(firstEntry), sectors, expectedBytes:sectors * SECTOR, receivedBytes:data.length,
+        expectedCrc32, actualCrc32,
+      });
+    }
   }
   const parts = [];
   for (let i=0;i<count;i++) {
@@ -112,7 +118,7 @@ export async function readGpts(device) {
   const tables = [];
   for (const lun of unit.luns) {
     const primary = await readTable(unit,lun,1n,'primary');
-    const backup = await readTable(unit,lun,primary.alternate,'backup');
+    const backup = await readTable(unit,lun,primary.alternate,'backup',primary);
     if (backup.alternate !== 1n || primary.count !== backup.count || !same(primary.data,backup.data)) {
       throw gptFailure(`Primary and backup partition tables disagree on LUN ${lun}`, {
         lun, section:'comparison', failure:'copies-disagree', backupLba:String(primary.alternate),

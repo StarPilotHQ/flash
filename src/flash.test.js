@@ -11,7 +11,7 @@ const imageBytes = new Uint8Array(4096).fill(23);
 const digest = bytesToHex(sha256(imageBytes));
 const image = {name:'boot', size:4096, hash:digest, hash_raw:digest, sparse:false};
 
-function fixture({type = '34', small = false, corrupt = false, noAck = false, systemNack = false} = {}) {
+function fixture({type = '34', small = false, corrupt = false, badBackup = false, noAck = false, systemNack = false} = {}) {
   const calls = [];
   const media = new Map();
   const luns = [1,2,4];
@@ -52,7 +52,9 @@ function fixture({type = '34', small = false, corrupt = false, noAck = false, sy
       view.setInt32(88,crc32(entries.subarray(0,512)),true);
       view.setInt32(16,crc32(header.subarray(0,92)),true);
       media.set(`${lun}:${current}`,header);
-      media.set(`${lun}:${start}`,entries.slice());
+      const stored = entries.slice();
+      if (badBackup && lun === 4 && current === 99n) stored[16] ^= 1;
+      media.set(`${lun}:${start}`,stored);
     }
   }
   const device = {
@@ -87,10 +89,13 @@ function fixture({type = '34', small = false, corrupt = false, noAck = false, sy
 
 const download = async () => new Blob([imageBytes]);
 test('writes inactive boot and activates after verification', async () => {
-  const {device,calls} = fixture();
-  const plan = await planFlash(device,[image],'34');
-  await flashRelease(device,[image],plan,download,() => {});
-  expect(calls).toEqual(['write inactive boot','read inactive boot','set boot LUN 2','reset']);
+  for (const [type,badBackup] of [['34',false],['32',true]]) {
+    const {device,calls} = fixture({type,badBackup});
+    const plan = await planFlash(device,[image],type);
+    expect(calls).toEqual([]);
+    await flashRelease(device,[image],plan,download,() => {});
+    expect(calls).toEqual(['write inactive boot','read inactive boot','set boot LUN 2','reset']);
+  }
 });
 
 test('blocks an unknown device or invalid target before writing', async () => {
@@ -106,9 +111,10 @@ test('logs GPT byte counts, checksums, and USB errors without writing', async ()
     const {device,calls} = fixture();
     const {firehose} = device;
     const read = firehose.cmdReadBuffer;
+    const lbaWithError = failure === 'checksum' ? 2n : 98n;
     firehose.cmdReadBuffer = async (lun,lba,sectors) => {
       const bytes = await read(lun,lba,sectors);
-      if (lun !== 4 || lba !== 98n) return bytes;
+      if (lun !== 4 || lba !== lbaWithError) return bytes;
       if (failure === 'usb-read') throw new Error('USB transfer failed');
       if (failure === 'byte-count') return bytes.slice(0, 128);
       bytes[16] ^= 1;
@@ -116,8 +122,8 @@ test('logs GPT byte counts, checksums, and USB errors without writing', async ()
     };
     const reason = await planFlash(device,[image],'34').catch(error => error);
     const log = JSON.parse(errorReport({steps:[]},reason));
-    expect(log.error.gpt).toMatchObject({lun:4,table:'backup',section:'entries',failure,
-      headerLba:'99',lba:'98',expectedBytes:4096});
+    expect(log.error.gpt).toMatchObject({lun:4,table:failure === 'checksum' ? 'primary' : 'backup',
+      section:'entries',failure,headerLba:failure === 'checksum' ? '1' : '99',lba:String(lbaWithError),expectedBytes:4096});
     if (failure === 'byte-count') expect(log.error.gpt.receivedBytes).toBe(128);
     if (failure === 'checksum') expect(log.error.gpt.actualCrc32).not.toBe(log.error.gpt.expectedCrc32);
     if (failure === 'usb-read') expect(log.error.cause).toBe('USB transfer failed');
