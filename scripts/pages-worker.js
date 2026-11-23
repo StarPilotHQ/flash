@@ -76,7 +76,8 @@ export default {
     if (!match || request.method !== 'GET') return new Response(null, {status:404});
 
     const [, revision, blocks, file, format] = match;
-    const response = await fetch(ROOT + (revision === 'other' ? 'offline-v2-' : 'offline-v1-') + revision + '/' + blocks + '-' + file);
+    const version = revision === 'clean' || revision === 'other' ? 'offline-v2-' : 'offline-v1-';
+    const response = await fetch(ROOT + version + revision + '/' + blocks + '-' + file);
     if (!response.ok) return new Response(null, {status:response.status === 404 ? 404 : 502});
 
     return new Response(response.body, {headers:{

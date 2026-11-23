@@ -6,7 +6,7 @@ if [ -d .starpilot-offline ]; then
   sudo chown -R --no-dereference comma:comma -- .starpilot-offline
   python3 .starpilot-offline/settings.py || echo "Could not apply pre-loaded recovery settings." >&2
   if [ ! -e .starpilot-offline/revision ] && [ ! -e .starpilot-offline/fork.pack ]; then
-    rm -- /data/continue.sh
+    rm -f -- /data/continue.sh
     rm -rf -- .starpilot-offline
     exec /bin/bash /usr/comma/comma.sh
   fi

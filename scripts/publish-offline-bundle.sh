@@ -13,7 +13,7 @@ case "$variant" in
 esac
 
 tag=offline-v1-$revision
-if [[ "$variant" = other ]]; then tag=offline-v2-other; fi
+if [[ "$variant" = clean || "$variant" = other ]]; then tag=offline-v2-$variant; fi
 release=$(gh release view "$tag" --json isDraft,assets 2>/dev/null || true)
 missing=()
 for blocks in 7864320 23330816 23592960; do
