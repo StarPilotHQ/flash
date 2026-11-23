@@ -1,5 +1,13 @@
 import { expect, test } from 'bun:test';
-import { planUserdata, validWifi, wifiProfile, writeUserdata } from './userdata.js';
+import { bundleGeometry, planUserdata, validWifi, wifiProfile, writeUserdata } from './userdata.js';
+
+test('selects the largest stock recovery image that fits userdata', () => {
+  expect(() => bundleGeometry(7864319n)).toThrow('userdata size');
+  expect(bundleGeometry(7864320n)).toBe(7864320);
+  expect(bundleGeometry(23330815n)).toBe(7864320);
+  expect(bundleGeometry(23330816n)).toBe(23330816);
+  expect(bundleGeometry(23592960n)).toBe(23592960);
+});
 
 const partition = {lun:0, start:80000n, sectors:8000n};
 const manifest = {blocks:8000, hash:'a'.repeat(64), size:8192, extents:[[0,1],[7999,1]]};

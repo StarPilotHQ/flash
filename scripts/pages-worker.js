@@ -1,7 +1,7 @@
 import { COMMIT, packRequest, validRef, validRepo } from '../src/github.js';
 
 const ROOT = 'https://github.com/StarPilotHQ/flash/releases/download/';
-const BUNDLE = /^\/bundles\/(clean|other|[a-f0-9]{40})\/(23330816|23592960)\/(userdata\.(json|bin))$/;
+const BUNDLE = /^\/bundles\/(clean|other|[a-f0-9]{40})\/(7864320|23330816|23592960)\/(userdata\.(json|bin))$/;
 
 export default {
   async fetch(request, env) {

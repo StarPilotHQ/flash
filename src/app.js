@@ -167,6 +167,7 @@ async function runRecovery(flash, erase, setup, selectedRelease) {
     if (erase) {
       const tables = await readGpts(device);
       userdata = planClean(tables.flatMap(table => table.primary.parts),device.firehose).find(part => part.name === 'userdata');
+      attempt.userdataSectors = String(userdata.sectors);
       const blocks = bundleGeometry(userdata.sectors);
       const stage = (variant, fork) => stageUserdata(
         new URL(`./bundles/${variant}/${blocks}/`,location.href),

@@ -10,8 +10,9 @@ export class BundleUnavailable extends Error {}
 
 export function bundleGeometry(sectors) {
   const size = sectors / GIB_SECTORS;
-  if (size < 89n) throw new Error('This userdata size has no supported clean recovery image');
-  return Number((size >= 90n ? 90n : 89n) * GIB_SECTORS);
+  const supported = [90n, 89n, 30n].find(gib => size >= gib);
+  if (supported === undefined) throw new Error('This userdata size has no supported clean recovery image');
+  return Number(supported * GIB_SECTORS);
 }
 
 export function validUsername(username) {

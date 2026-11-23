@@ -14,13 +14,20 @@ esac
 
 tag=offline-v1-$revision
 if [[ "$variant" = other ]]; then tag=offline-v2-other; fi
-if release=$(gh release view "$tag" --json isDraft 2>/dev/null) && jq -e '.isDraft == false' <<< "$release" >/dev/null; then
+release=$(gh release view "$tag" --json isDraft,assets 2>/dev/null || true)
+missing=()
+for blocks in 7864320 23330816 23592960; do
+  if ! jq -e --arg blocks "$blocks" '([.assets[]?.name] | contains([$blocks + "-userdata.json", $blocks + "-userdata.bin"]))' <<< "${release:-null}" >/dev/null; then
+    missing+=("$blocks")
+  fi
+done
+if [[ "${#missing[@]}" == 0 ]] && jq -e '.isDraft == false' <<< "$release" >/dev/null; then
   exit 0
 fi
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 set --
-if [[ "$variant" == stable || "$variant" == testing ]]; then
+if [[ "${#missing[@]}" != 0 && ( "$variant" == stable || "$variant" == testing ) ]]; then
   git clone --depth 1 --no-checkout --single-branch --branch "$variant" "$origin" "$work/source"
   [[ "$(git -C "$work/source" rev-parse HEAD)" == "$revision" ]]
   set -- --repo "$work/source" --branch "$variant"
@@ -28,7 +35,7 @@ elif [[ "$variant" = other ]]; then
   set -- --fork-template
 fi
 
-for blocks in 23330816 23592960; do
+for blocks in "${missing[@]}"; do
   python3 scripts/build-offline-userdata.py "$work/userdata-$blocks.img" --blocks "$blocks" "$@"
   if [[ "$variant" = other ]]; then
     python3 scripts/pack-offline-userdata.py "$work/userdata-$blocks.img" "$work/$blocks" --fork-template
@@ -43,5 +50,9 @@ done
 if [[ -z "${release:-}" ]]; then
   gh release create "$tag" --draft --prerelease --title "$tag" --notes ""
 fi
-gh release upload "$tag" "$work"/*-userdata.{json,bin} --clobber
-gh release edit "$tag" --draft=false --latest=false
+if [[ "${#missing[@]}" != 0 ]]; then
+  gh release upload "$tag" "$work"/*-userdata.{json,bin} --clobber
+fi
+if ! jq -e '.isDraft == false' <<< "${release:-null}" >/dev/null; then
+  gh release edit "$tag" --draft=false --latest=false
+fi
