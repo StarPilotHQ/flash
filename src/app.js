@@ -3,7 +3,7 @@ import { usbClass } from '@commaai/qdl/usblib';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { flashRelease, planFlash } from './flash.js';
-import { downloadImage } from './images.js';
+import { downloadImage, probeStorage } from './images.js';
 import { loadForkRelease, loadRelease, verifyForkBootChain } from './release.js';
 import { resolveFork, validRef } from './github.js';
 import { stageFork } from './fork.js';
@@ -167,6 +167,15 @@ async function runRecovery(flash, erase, setup, selectedRelease) {
     folder = 'recovery-' + crypto.randomUUID();
     const directory = await root.getDirectoryHandle(folder,{create:true});
 
+    if (flash && !localFolder) {
+      const {quota, usage} = await navigator.storage.estimate();
+      const needed = images.reduce((sum,image) => sum+image.size,0);
+      if (Number.isFinite(quota) && Number.isFinite(usage) && quota-usage<needed) {
+        throw new DOMException('Insufficient browser storage to stage AGNOS', 'QuotaExceededError');
+      }
+      await probeStorage(directory,needed,status);
+    }
+
     let offline, userdata;
     if (erase) {
       const tables = await readGpts(device);
@@ -202,13 +211,6 @@ async function runRecovery(flash, erase, setup, selectedRelease) {
     }
 
     if (flash) {
-      if (!localFolder) {
-        const {quota, usage} = await navigator.storage.estimate();
-        const needed = images.reduce((sum,image) => sum+image.size,0);
-        if (Number.isFinite(quota) && Number.isFinite(usage) && quota-usage<needed) {
-          throw new DOMException('Insufficient browser storage to stage AGNOS', 'QuotaExceededError');
-        }
-      }
       await flashRelease(device,images,plan,image => downloadImage(image,directory,status),status,erase ? replaceUserdata : undefined);
     } else {
       await replaceUserdata();

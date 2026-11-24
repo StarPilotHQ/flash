@@ -3,7 +3,7 @@ import {sha256} from '@noble/hashes/sha256';
 import {bytesToHex} from '@noble/hashes/utils';
 import {buf as crc32} from 'crc-32';
 import {flashRelease, planFlash} from './flash.js';
-import {downloadImage, unpack} from './images.js';
+import {downloadImage, probeStorage, unpack} from './images.js';
 import {imagesForDevice} from './devices.js';
 import {errorReport} from './diagnostics.js';
 
@@ -189,6 +189,36 @@ test('tries Dropbox, Firestar and Firestar East in that order', async () => {
     expect(bytesToHex(sha256(new Uint8Array(await downloaded.arrayBuffer())))).toEqual(digest);
   } finally {
     fetchMock.mockRestore();
+  }
+});
+
+test('browser storage probe writes the full image budget and removes its temporary file', async () => {
+  for (const quota of [false, true]) {
+    const writes = [];
+    const failure = new DOMException('Disk quota exceeded','QuotaExceededError');
+    const directory = {
+      async getFileHandle() {
+        return {async createWritable() {
+          return {
+            async write(chunk) {
+              if (quota) throw failure;
+              writes.push(chunk.length);
+            },
+            async close() { writes.push('close'); },
+            async abort() { writes.push('abort'); },
+          };
+        }};
+      },
+      async removeEntry(name) { writes.push(name); },
+    };
+    const probe = probeStorage(directory,8 * 1024 ** 2 + 4096,() => {});
+    if (quota) {
+      await expect(probe).rejects.toBe(failure);
+      expect(writes).toEqual(['abort','storage-probe']);
+    } else {
+      await probe;
+      expect(writes).toEqual([8 * 1024 ** 2,4096,'close','storage-probe']);
+    }
   }
 });
 

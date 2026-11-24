@@ -92,6 +92,33 @@ export async function unpack(source, image, write) {
   }
 }
 
+export async function probeStorage(directory, bytes, status) {
+  const name = 'storage-probe';
+  const file = await directory.getFileHandle(name,{create:true});
+  const chunk = new Uint8Array(Math.min(bytes,8 * CHUNK));
+  const message = 'Checking browser storage';
+  status(message,0,bytes);
+  try {
+    const writer = await file.createWritable();
+    try {
+      for (let written = 0; written < bytes;) {
+        const data = chunk.subarray(0,Math.min(chunk.length,bytes - written));
+        await writer.write(data);
+        written += data.length;
+        status(message,written,bytes);
+      }
+      await writer.close();
+    } catch (error) {
+      await writer.abort().catch(() => {});
+      throw error;
+    }
+  } catch (error) {
+    await directory.removeEntry(name).catch(() => {});
+    throw error;
+  }
+  await directory.removeEntry(name);
+}
+
 export async function downloadImage(image, directory, status) {
   const errors = [];
   for (const url of [image.url, ...(image.fallback_urls ?? [])]) {
