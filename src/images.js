@@ -113,6 +113,7 @@ export async function downloadImage(image, directory, status) {
       return await file.getFile();
     } catch (error) {
       await writer.abort().catch(() => {});
+      if (error.name === 'QuotaExceededError') throw error;
       errors.push(`${host}: ${error.message ?? error}`);
     }
   }

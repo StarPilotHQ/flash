@@ -165,14 +165,15 @@ test('unpacking rejects data that disagrees with the image digest', async () => 
   await expect(unpack(new Blob([new Uint8Array(4096)]).stream(),image,async () => {})).rejects.toThrow('checksum');
 });
 
+const compressedBoot = Uint8Array.fromBase64('/Td6WFoAAATm1rRGAgAhARYAAAB0L+Wj4A//ABldAAvv+7/+o7Fe5fg/sqomVfhocEFwFQ4kGM8AAAAAHrvAUk+aZNkAATWAIAAAAG9dNoaxxGf7AgAAAAAEWVo=');
+
 test('tries Dropbox, Firestar and Firestar East in that order', async () => {
-  const compressed = Uint8Array.fromBase64('/Td6WFoAAATm1rRGAgAhARYAAAB0L+Wj4A//ABldAAvv+7/+o7Fe5fg/sqomVfhocEFwFQ4kGM8AAAAAHrvAUk+aZNkAATWAIAAAAG9dNoaxxGf7AgAAAAAEWVo=');
   const urls = ['https://dl.dropboxusercontent.com/x','https://files.firestar.link/x','https://files-east.firestar.link/x'];
   const tried = [];
   const fetchMock = spyOn(globalThis,'fetch').mockImplementation(async url => {
     tried.push(url);
     if (tried.length === 1) return new Response(null,{status:503});
-    return new Response(tried.length === 2 ? 'Failed mirror' : compressed);
+    return new Response(tried.length === 2 ? 'Failed mirror' : compressedBoot);
   });
   let file;
   const directory = { async getFileHandle() {
@@ -186,6 +187,28 @@ test('tries Dropbox, Firestar and Firestar East in that order', async () => {
     const downloaded = await downloadImage({...image,url:urls[0],fallback_urls:urls.slice(1)},directory,() => {});
     expect(tried).toEqual(urls);
     expect(bytesToHex(sha256(new Uint8Array(await downloaded.arrayBuffer())))).toEqual(digest);
+  } finally {
+    fetchMock.mockRestore();
+  }
+});
+
+test('a storage quota failure aborts staging without retrying another mirror or writing to USB', async () => {
+  const {device,calls} = fixture();
+  const plan = await planFlash(device,[image],'34');
+  const quotaError = new DOMException('Disk quota exceeded','QuotaExceededError');
+  const fetchMock = spyOn(globalThis,'fetch').mockImplementation(async () => new Response(compressedBoot));
+  const abort = () => Promise.resolve();
+  const directory = { async getFileHandle() {
+    return { async createWritable() {
+      return { async write() { throw quotaError; }, abort };
+    }};
+  }};
+  const mirrored = {...image,url:'https://files.firestar.link/x',fallback_urls:['https://files-east.firestar.link/x']};
+  try {
+    await expect(flashRelease(device,[mirrored],plan,entry => downloadImage(entry,directory,() => {}),() => {}))
+      .rejects.toBe(quotaError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual([]);
   } finally {
     fetchMock.mockRestore();
   }

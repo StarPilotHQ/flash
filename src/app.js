@@ -17,12 +17,14 @@ const PROGRAMMER = 'https://raw.githubusercontent.com/commaai/flash/d604aa7490be
 const PROGRAMMER_HASH = '5e9d300470a8046c26657277b47ce0fc5de8c1168719b98311aeda0c3ce2e013';
 const $ = id => document.getElementById(id);
 const supported = Boolean(navigator.usb && navigator.storage?.getDirectory);
+const canChooseFolder = typeof window.showDirectoryPicker === 'function';
 const actions = ['flash', 'erase', 'install', 'preload'];
 const choices = [...actions, 'branch', 'username', 'wifi', 'wifi-name', 'wifi-password', 'other', 'fork-owner', 'fork-branch'];
 let releaseCheck;
 let releaseTimer;
 let attempt;
 let savedErrorLog;
+let localFolder;
 
 function reportContext() {
   return {startedAt:new Date().toISOString(), build:new URL(import.meta.url).searchParams.get('v'),
@@ -85,6 +87,8 @@ function error(reason, secrets) {
 function updateControls(busy = false) {
   for (const id of choices) $(id).disabled = !supported || busy;
   const erase = $('erase').checked;
+  $('choose-temp-folder').hidden = !supported || !canChooseFolder || Boolean(localFolder) || (!$('flash').checked && !erase);
+  $('choose-temp-folder').disabled = busy;
   for (const id of ['install', 'preload', 'wifi']) $(id).disabled ||= !erase;
   const preload = erase && $('preload').checked;
   const savingWifi = erase && $('wifi').checked;
@@ -159,7 +163,7 @@ async function runRecovery(flash, erase, setup, selectedRelease) {
     if (flash && setup.fork) verifyForkBootChain(images,imagesForDevice(await loadRelease('stable'),deviceType),deviceType);
     const plan = flash ? await planFlash(device,images,deviceType) : null;
     if (plan) attempt.slots = {active:plan.active, target:plan.target};
-    root = await navigator.storage.getDirectory();
+    root = localFolder ?? await navigator.storage.getDirectory();
     folder = 'recovery-' + crypto.randomUUID();
     const directory = await root.getDirectoryHandle(folder,{create:true});
 
@@ -184,7 +188,6 @@ async function runRecovery(flash, erase, setup, selectedRelease) {
           offline = await stage('other',await stageFork(fork,directory,status));
         }
       }
-      $('wifi-password').value = '';
     }
 
     async function replaceUserdata() {
@@ -199,10 +202,12 @@ async function runRecovery(flash, erase, setup, selectedRelease) {
     }
 
     if (flash) {
-      const {quota, usage} = await navigator.storage.estimate();
-      const needed = images.reduce((sum,image) => sum+image.size,0);
-      if (Number.isFinite(quota) && Number.isFinite(usage) && quota-usage<needed) {
-        throw new Error('Free at least 5 GB of browser storage before flashing.');
+      if (!localFolder) {
+        const {quota, usage} = await navigator.storage.estimate();
+        const needed = images.reduce((sum,image) => sum+image.size,0);
+        if (Number.isFinite(quota) && Number.isFinite(usage) && quota-usage<needed) {
+          throw new DOMException('Insufficient browser storage to stage AGNOS', 'QuotaExceededError');
+        }
       }
       await flashRelease(device,images,plan,image => downloadImage(image,directory,status),status,erase ? replaceUserdata : undefined);
     } else {
@@ -210,6 +215,7 @@ async function runRecovery(flash, erase, setup, selectedRelease) {
       status('Restarting your comma');
       await device.reset();
     }
+    if (setup.wifi) $('wifi-password').value = '';
     status(setup.branch
       ? `USB writes complete. Your comma installs ${setup.fork ? release.repo + '/' + release.branch : 'StarPilot ' + setup.branch} when AGNOS boots.`
       : 'USB writes complete. Your comma is restarting.');
@@ -237,6 +243,17 @@ $('download-error-log').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
+$('choose-temp-folder').addEventListener('click', async () => {
+  try {
+    localFolder = await window.showDirectoryPicker({mode:'readwrite'});
+    $('error').hidden = true;
+    updateControls();
+    status('Temporary folder selected. Click Start recovery.');
+  } catch (reason) {
+    if (reason.name !== 'AbortError') error(reason);
+  }
+});
+
 $('start').addEventListener('click',async () => {
   const flash = $('flash').checked;
   const erase = $('erase').checked;
@@ -260,8 +277,15 @@ $('start').addEventListener('click',async () => {
   try {
     if ((flash || setup.branch) && !releaseCheck) refreshRelease();
     await runRecovery(flash,erase,setup,flash || setup.branch ? releaseCheck : null);
+    localFolder = undefined;
   } catch (reason) {
     error(reason, [setup.username, setup.wifi?.name, setup.wifi?.password]);
+    if (reason.name === 'QuotaExceededError') {
+      localFolder = undefined;
+      $('error').textContent = canChooseFolder
+        ? 'Temporary storage ran out. Choose a local folder on a drive with at least 6 GB free, then retry.'
+        : 'Temporary storage is full. Free at least 6 GB on this computer and retry in desktop Chrome or Edge.';
+    }
     status('Recovery stopped');
   } finally {
     attempt = undefined;
