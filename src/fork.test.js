@@ -3,6 +3,7 @@ import {sha1} from '@noble/hashes/sha1';
 import {copyGitPack, moduleUrls} from './fork.js';
 import {submoduleRepo, validRef} from './github.js';
 import {planForkSpace} from './userdata.js';
+import {imagesForDevice} from './devices.js';
 import {verifyForkBootChain} from './release.js';
 
 test('resolves public GitHub submodule URLs and rejects unsafe locations', () => {
@@ -38,4 +39,29 @@ test('protects existing metadata and rejects unknown fork boot firmware', () => 
   expect(planForkSpace([[11,262144]],part,300000,[write])[0].sector).toBe(2011n);
   expect(() => planForkSpace([[10,262144]],part,300000,[write])).toThrow('overlaps');
   expect(() => verifyForkBootChain([{name:'abl',hash_raw:'fork'}],[{name:'abl',hash_raw:'hardware'}])).toThrow('hardware');
+});
+
+test('allows the complete official recovery boot chain on comma 3X and four', () => {
+  const images = Object.entries({
+    xbl: 'e8acf2a9cc7f0ce84cb803bfea9477f765c0d7b4daf26048e59651b9e6a7bfbb',
+    xbl_config: '758552ecf92b5569677197783bf0ccb73d7f961685308e45d3276ac9dd974f85',
+    abl: 'b6fba807b9bcd66a31f2afb0eba5163ec239693ad32e2e4200f6c356adfe098c',
+    aop: '78b2287ca219a0811b3004c523fa0f4749e4d1fd92be3aba61699305b7943ad1',
+    devcfg: 'f71df3a86958c093ba3969254c4db025187eef9385427f1ade946742939b43cc',
+  }).map(([name, hash_raw]) => ({name, hash_raw}));
+  const reference = images.map(image => image.name === 'abl'
+    ? {...image, hash_raw:'29fd7ed1c012e599420764840f9f11286d34dbff4adaf102a447f06d8c5e0b35'} : image);
+  const release = {images, c3Images:images.map(image => ({...image, hash_raw:'c'.repeat(64)}))};
+
+  for (const type of ['33', '34']) {
+    expect(() => verifyForkBootChain(imagesForDevice(release,type),reference,type)).not.toThrow();
+    expect(() => verifyForkBootChain(reference,reference,type)).not.toThrow();
+    for (const name of images.map(image => image.name)) {
+      const invalid = images.map(image => image.name === name ? {...image, hash_raw:'0'.repeat(64)} : image);
+      expect(() => verifyForkBootChain(invalid,reference,type)).toThrow('hardware');
+    }
+    expect(() => verifyForkBootChain(images.slice(1),reference,type)).toThrow('hardware');
+  }
+  expect(() => verifyForkBootChain(images,release.c3Images,'32')).toThrow('hardware');
+  expect(() => verifyForkBootChain(imagesForDevice(release,'32'),release.c3Images,'32')).not.toThrow();
 });

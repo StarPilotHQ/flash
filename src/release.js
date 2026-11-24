@@ -2,9 +2,18 @@ import {browserRef, github} from './github.js';
 
 const SOURCE = 'https://raw.githubusercontent.com/StarPilotHQ/StarPilot';
 const HARDWARE = 'openpilot/common/hardware/comma';
-const PARTITIONS = ['xbl', 'xbl_config', 'abl', 'aop', 'devcfg', 'boot', 'system'];
+const BOOT_CHAIN = ['xbl', 'xbl_config', 'abl', 'aop', 'devcfg'];
+const PARTITIONS = [...BOOT_CHAIN, 'boot', 'system'];
 const HASH = /^[0-9a-f]{64}$/;
 const NEWER_ABL = '29fd7ed1c012e599420764840f9f11286d34dbff4adaf102a447f06d8c5e0b35';
+// The shared chain in comma's release-tizi (52b2b626) and release-mici (f7db927c) recovery manifests.
+const OFFICIAL_RECOVERY_CHAIN = {
+  xbl: 'e8acf2a9cc7f0ce84cb803bfea9477f765c0d7b4daf26048e59651b9e6a7bfbb',
+  xbl_config: '758552ecf92b5569677197783bf0ccb73d7f961685308e45d3276ac9dd974f85',
+  abl: 'b6fba807b9bcd66a31f2afb0eba5163ec239693ad32e2e4200f6c356adfe098c',
+  aop: '78b2287ca219a0811b3004c523fa0f4749e4d1fd92be3aba61699305b7943ad1',
+  devcfg: 'f71df3a86958c093ba3969254c4db025187eef9385427f1ade946742939b43cc',
+};
 
 export function validBranch(branch) {
   return branch === 'stable' || branch === 'testing';
@@ -77,10 +86,12 @@ export async function loadForkRelease(fork, flash = true) {
   throw new Error('No supported AGNOS manifest was found in this fork');
 }
 
-export function verifyForkBootChain(images, reference) {
-  for (const image of images.slice(0,5)) {
-    if (image.hash_raw !== reference.find(entry => entry.name === image.name)?.hash_raw) {
-      throw new Error('This fork’s bootloader does not match the detected hardware. Nothing was written.');
-    }
-  }
+export function verifyForkBootChain(images, reference, deviceType) {
+  const matches = expected => BOOT_CHAIN.every(name => {
+    const hash = images.find(image => image.name === name)?.hash_raw;
+    return HASH.test(hash) && hash === expected(name);
+  });
+  if (matches(name => reference.find(image => image.name === name)?.hash_raw)) return;
+  if (['33', '34'].includes(deviceType) && matches(name => OFFICIAL_RECOVERY_CHAIN[name])) return;
+  throw new Error('This fork’s bootloader does not match the detected hardware. Nothing was written.');
 }

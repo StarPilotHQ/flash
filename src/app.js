@@ -156,7 +156,7 @@ async function runRecovery(flash, erase, setup, selectedRelease) {
     const release = await selectedRelease;
     if (release) Object.assign(attempt.release, {agnos:release.version, revision:release.revision});
     const images = flash ? imagesForDevice(release,deviceType) : [];
-    if (flash && setup.fork) verifyForkBootChain(images,imagesForDevice(await loadRelease('stable'),deviceType));
+    if (flash && setup.fork) verifyForkBootChain(images,imagesForDevice(await loadRelease('stable'),deviceType),deviceType);
     const plan = flash ? await planFlash(device,images,deviceType) : null;
     if (plan) attempt.slots = {active:plan.active, target:plan.target};
     root = await navigator.storage.getDirectory();
